@@ -91,6 +91,12 @@ const config: Config = {
         },
         {
           type: 'docSidebar',
+          sidebarId: 'backendSidebar',
+          position: 'left',
+          label: '后端开发',
+        },
+        {
+          type: 'docSidebar',
           sidebarId: 'interviewSidebar',
           position: 'left',
           label: '前端面试',

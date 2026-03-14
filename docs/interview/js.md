@@ -53,6 +53,12 @@ title: JavaScript（面试要点）
 - [ajax 实现原理以及和 fetch 有什么区别？](#44-ajax-实现原理以及和-fetch-有什么区别)
 - [虚拟DOM是什么？](#45-虚拟dom是什么)
 - [diff 算法是什么？](#46-diff-算法是什么)
+- [前端埋点统计有哪些方案？](#47-前端埋点统计有哪些方案)
+- [如何实现JS异常监控与上报？](#48-如何实现js异常监控与上报)
+- [ES6函数默认参数是什么？如何使用？](#49-es6函数默认参数是什么如何使用)
+- [ES6展开运算符（Spread Operator）是什么？有哪些用法？](#50-es6展开运算符spread-operator是什么有哪些用法)
+- [ES6 Proxy是什么？有什么作用？](#51-es6-proxy是什么有什么作用)
+- [ES6 Reflect是什么？有什么作用？](#52-es6-reflect是什么有什么作用)
 
 ---
 
@@ -4332,3 +4338,944 @@ const TodoList = ({ todos }) => (
   </ul>
 );
 ```
+
+### Vue 和 React Diff 算法的区别
+
+#### 1. 对比策略不同
+
+**React: 仅同层比较**
+- 只会比较同一层级的 DOM 节点
+- 跨层级的移动会被视为删除 + 创建
+- React 18 使用 Fiber 架构，支持可中断的 diff 过程
+
+**Vue: 优化了同层比较**
+- 同样基于同层比较，但针对列表场景做了特殊优化
+- Vue 3 引入了更长的最长递增子序列算法来处理列表
+
+#### 2. 列表 diff 处理
+
+**React - 仅 key 比较**
+
+```jsx
+// 通过 key 识别元素
+{items.map(item => <div key={item.id}>{item.name}</div>)}
+```
+
+- 没有 key 时按顺序比较
+- 有 key 时通过 key 匹配，但不会复用 DOM 节点
+
+**Vue - 双端比较 + 最长递增子序列**
+
+```vue
+<div v-for="item in items" :key="item.id">{{ item.name }}</div>
+```
+
+- Vue 2: 双端比较（从两端向中间比较）
+- Vue 3: 使用最长递增子序列算法，减少 DOM 操作
+
+#### 3. 编译时优化
+
+**React: 运行时 diff**
+- diff 完全在运行时进行
+- 依赖 JSX 编译，但优化有限
+
+**Vue: 编译时 + 运行时**
+- 编译时生成优化标记（静态提升、patchFlags）
+- 跳过静态节点的 diff
+- Vue 3 的 `Block Tree` 进一步优化
+
+#### 4. 复杂度对比
+
+| 框架 | 最坏情况 | 优化后 |
+|------|----------|--------|
+| React | O(n³) → O(n) | 同层比较降为 O(n) |
+| Vue 2 | O(n) | 双端比较，常数更小 |
+| Vue 3 | O(n) | 最长递增子序列，更少移动 |
+
+#### 5. 关键代码差异
+
+**React 的 diff（简化逻辑）**
+
+```javascript
+// React 只会比较同层级
+function reconcileChildren(returnFiber, children) {
+  // 只做同层比较，跨层级直接销毁重建
+  if (old.key === new.key) {
+    updateElement();
+  } else {
+    // 删除旧的，创建新的
+  }
+}
+```
+
+**Vue 3 的 diff（最长递增子序列）**
+
+```javascript
+// Vue 3 使用最长递增子序列优化列表更新
+function patchKeyedChildren(c1, c2) {
+  // 1. 同步头部节点
+  // 2. 同步尾部节点
+  // 3. 添加新节点
+  // 4. 移除旧节点
+  // 5. 处理最长递增子序列，只移动必要的节点
+  const increasingNewSequence = getSequence(...);
+  // 只移动不在最长递增子序列中的节点
+}
+```
+
+#### 6. 核心差异总结
+
+| 特性 | React | Vue |
+|------|-------|-----|
+| 策略 | 同层比较 | 同层 + 双端/LIS |
+| 编译优化 | 较少 | 大量编译时优化 |
+| 列表处理 | 简单 key 匹配 | 复杂的最长递增子序列 |
+| 性能 | 依赖开发者优化 | 框架自动优化更多 |
+| 静态节点 | 运行时跳过 | 编译时标记，完全跳过 |
+
+#### 7. 实际影响
+
+**React 需要开发者注意：**
+- 使用 `React.memo` 避免不必要的重渲染
+- 使用 `useMemo`、`useCallback` 优化性能
+- 合理使用 `key` 属性
+- 避免跨层级移动节点
+
+**Vue 自动优化：**
+- 静态节点自动提升，只 diff 动态部分
+- 编译时生成优化提示
+- 列表更新自动使用最优算法
+- 开发者无需过多关注性能细节
+
+---
+
+## 49. ES6函数默认参数是什么？如何使用？
+
+### 什么是函数默认参数？
+
+ES6允许为函数参数设置默认值，当调用函数时如果没有传入该参数，或传入`undefined`，将使用默认值。
+
+### 基本用法
+
+```javascript
+// ES5写法
+function greet(name) {
+  name = name || 'Guest';
+  return `Hello, ${name}!`;
+}
+
+// ES6默认参数
+function greet(name = 'Guest') {
+  return `Hello, ${name}!`;
+}
+
+greet();          // "Hello, Guest!"
+greet('John');    // "Hello, John!"
+greet(undefined); // "Hello, Guest!"
+greet(null);      // "Hello, null!" (null不会触发默认值)
+```
+
+### 默认参数可以是表达式
+
+```javascript
+function getDefaultName() {
+  return 'Anonymous';
+}
+
+function greet(name = getDefaultName()) {
+  return `Hello, ${name}!`;
+}
+
+// 默认值可以是前面的参数
+function multiply(a, b = a) {
+  return a * b;
+}
+multiply(5);     // 25 (5 * 5)
+multiply(2, 3);  // 6
+
+// 甚至可以是一个函数调用
+function fetchData(url, timeout = getDefaultTimeout()) {
+  // ...
+}
+```
+
+### 解构赋值与默认参数结合
+
+```javascript
+// 对象解构默认值
+function createUser({ name = 'Anonymous', age = 18, role = 'user' } = {}) {
+  return { name, age, role };
+}
+
+createUser();                           // { name: 'Anonymous', age: 18, role: 'user' }
+createUser({ name: 'John' });           // { name: 'John', age: 18, role: 'user' }
+createUser({ name: 'Jane', age: 25 });  // { name: 'Jane', age: 25, role: 'user' }
+
+// 数组解构默认值
+function processPair([x = 0, y = 0] = []) {
+  return x + y;
+}
+
+processPair();        // 0 (使用默认数组[0, 0])
+processPair([5]);     // 5 (5 + 0)
+processPair([3, 4]);  // 7
+```
+
+### 暂时性死区（TDZ）
+
+```javascript
+// 错误示例：参数存在暂时性死区
+function foo(a = b, b) {  // ReferenceError: Cannot access 'b' before initialization
+  return a + b;
+}
+
+// 正确示例
+function foo(a = 1, b = a) {  // 后面的参数可以使用前面参数的默认值
+  return a + b;
+}
+foo();  // 2
+
+// 作用域问题
+let x = 1;
+function foo(x = x) {  // ReferenceError: x is not defined
+  // 参数作用域与函数体不同
+}
+```
+
+### 实际应用场景
+
+```javascript
+// 1. API请求封装
+function request(url, method = 'GET', data = null, headers = {}) {
+  return fetch(url, { method, body: data, headers });
+}
+
+// 2. 配置对象合并
+function initApp(config = {}) {
+  const defaultConfig = {
+    theme: 'light',
+    language: 'zh-CN',
+    debug: false
+  };
+  return { ...defaultConfig, ...config };
+}
+
+// 3. 必填参数检查
+function required(paramName) {
+  throw new Error(`Missing parameter: ${paramName}`);
+}
+
+function createUser(name = required('name'), email = required('email')) {
+  return { name, email };
+}
+
+createUser();           // Error: Missing parameter: name
+createUser('John');     // Error: Missing parameter: email
+createUser('John', 'john@example.com');  // { name: 'John', email: 'john@example.com' }
+```
+
+---
+
+## 50. ES6展开运算符（Spread Operator）是什么？有哪些用法？
+
+### 什么是展开运算符？
+
+展开运算符（`...`）允许一个表达式在某处展开，可以用于数组、对象和函数参数。
+
+### 数组中的展开运算符
+
+#### 1. 数组展开
+
+```javascript
+const arr1 = [1, 2, 3];
+const arr2 = [...arr1, 4, 5, 6];  // [1, 2, 3, 4, 5, 6]
+
+// 复制数组（浅拷贝）
+const original = [1, 2, 3];
+const copy = [...original];  // [1, 2, 3]
+copy.push(4);
+console.log(original);  // [1, 2, 3] - 原数组不受影响
+```
+
+#### 2. 合并数组
+
+```javascript
+const arr1 = [1, 2];
+const arr2 = [3, 4];
+const arr3 = [5, 6];
+
+// 替代concat
+const merged = [...arr1, ...arr2, ...arr3];  // [1, 2, 3, 4, 5, 6]
+
+// 在任意位置插入
+const inserted = [0, ...arr1, 2.5, ...arr2];  // [0, 1, 2, 2.5, 3, 4]
+```
+
+#### 3. 将类数组/可迭代对象转为数组
+
+```javascript
+// 将字符串转为字符数组
+const chars = [...'Hello'];  // ['H', 'e', 'l', 'l', 'o']
+
+// 将Set转为数组
+const set = new Set([1, 2, 3]);
+const arr = [...set];  // [1, 2, 3]
+
+// 将Map的keys/values转为数组
+const map = new Map([['a', 1], ['b', 2]]);
+const keys = [...map.keys()];    // ['a', 'b']
+const values = [...map.values()]; // [1, 2]
+
+// DOM操作
+const divs = document.querySelectorAll('div');
+const divArray = [...divs];  // 转为真正的数组，可以使用数组方法
+divArray.forEach(div => console.log(div));
+```
+
+### 对象中的展开运算符（ES2018）
+
+#### 1. 对象展开
+
+```javascript
+const obj1 = { a: 1, b: 2 };
+const obj2 = { ...obj1, c: 3 };  // { a: 1, b: 2, c: 3 }
+
+// 复制对象（浅拷贝）
+const original = { x: 1, y: 2 };
+const copy = { ...original };
+```
+
+#### 2. 合并对象
+
+```javascript
+const defaults = { theme: 'light', lang: 'en' };
+const userSettings = { theme: 'dark' };
+
+const settings = { ...defaults, ...userSettings };
+// { theme: 'dark', lang: 'en' } - 后面的属性会覆盖前面的
+
+// 对象解构剩余属性
+const { a, b, ...rest } = { a: 1, b: 2, c: 3, d: 4 };
+console.log(rest);  // { c: 3, d: 4 }
+```
+
+### 函数调用中的展开运算符
+
+```javascript
+const numbers = [1, 2, 3, 4, 5];
+
+// 替代apply
+Math.max(...numbers);  // 5
+Math.min(...numbers);  // 1
+
+// 数组展开为参数
+function sum(a, b, c) {
+  return a + b + c;
+}
+const nums = [1, 2, 3];
+sum(...nums);  // 6
+
+// 与剩余参数的区别
+function example(first, ...rest) {  // 剩余参数：收集参数
+  console.log(first);
+  console.log(rest);
+}
+
+const args = [1, 2, 3, 4];
+example(...args);  // 展开：1, [2, 3, 4]
+```
+
+### 实际应用场景
+
+```javascript
+// 1. 数组去重
+const arr = [1, 2, 2, 3, 3, 3];
+const unique = [...new Set(arr)];  // [1, 2, 3]
+
+// 2. 条件添加属性
+const condition = true;
+const obj = {
+  a: 1,
+  b: 2,
+  ...(condition && { c: 3 })  // condition为true时才添加c
+};
+
+// 3. 函数参数默认值合并
+function createConfig(userConfig) {
+  return {
+    host: 'localhost',
+    port: 3000,
+    ...userConfig  // 用户配置覆盖默认配置
+  };
+}
+
+// 4. React中的状态更新
+// setState({ ...state, count: state.count + 1 });
+
+// 5. Redux中的Reducer
+function reducer(state, action) {
+  switch (action.type) {
+    case 'UPDATE_USER':
+      return { ...state, user: { ...state.user, ...action.payload } };
+    default:
+      return state;
+  }
+}
+```
+
+### 展开运算符 vs 剩余参数
+
+| 特性 | 展开运算符 | 剩余参数 |
+|------|-----------|----------|
+| 位置 | 调用时、数组/对象字面量中 | 函数定义参数中 |
+| 作用 | 展开元素 | 收集剩余参数 |
+| 语法 | `...arr` | `...args` |
+
+```javascript
+// 展开运算符（展开）
+const arr = [1, 2, 3];
+const newArr = [...arr, 4];  // [1, 2, 3, 4]
+
+// 剩余参数（收集）
+function sum(...numbers) {    // 收集所有参数为数组
+  return numbers.reduce((a, b) => a + b, 0);
+}
+sum(1, 2, 3, 4);  // 10
+```
+
+---
+
+## 51. ES6 Proxy是什么？有什么作用？
+
+### 什么是Proxy？
+
+Proxy（代理）是ES6引入的元编程特性，用于创建一个对象的代理，可以拦截并自定义对象的基本操作（如属性查找、赋值、枚举、函数调用等）。
+
+### 基本语法
+
+```javascript
+const proxy = new Proxy(target, handler);
+// target: 要代理的目标对象
+// handler: 包含拦截器的对象
+```
+
+### 常用拦截器
+
+#### 1. get - 拦截属性读取
+
+```javascript
+const person = { name: 'John', age: 30 };
+
+const proxy = new Proxy(person, {
+  get(target, prop, receiver) {
+    if (prop in target) {
+      return target[prop];
+    }
+    return `Property ${prop} not found`;
+  }
+});
+
+console.log(proxy.name);      // "John"
+console.log(proxy.gender);    // "Property gender not found"
+```
+
+#### 2. set - 拦截属性设置
+
+```javascript
+const validator = {
+  set(target, prop, value) {
+    if (prop === 'age') {
+      if (!Number.isInteger(value)) {
+        throw new TypeError('Age must be an integer');
+      }
+      if (value < 0 || value > 150) {
+        throw new RangeError('Age must be between 0 and 150');
+      }
+    }
+    target[prop] = value;
+    return true;  // 严格模式下必须返回true
+  }
+};
+
+const person = new Proxy({}, validator);
+person.age = 30;      // OK
+person.age = '30';    // TypeError: Age must be an integer
+person.age = 200;     // RangeError: Age must be between 0 and 150
+```
+
+#### 3. has - 拦截in操作符
+
+```javascript
+const range = {
+  start: 1,
+  end: 10
+};
+
+const proxy = new Proxy(range, {
+  has(target, prop) {
+    return prop >= target.start && prop <= target.end;
+  }
+});
+
+console.log(5 in proxy);   // true
+console.log(15 in proxy);  // false
+```
+
+#### 4. deleteProperty - 拦截delete操作
+
+```javascript
+const protectedObj = {
+  _private: 'secret',
+  public: 'open'
+};
+
+const proxy = new Proxy(protectedObj, {
+  deleteProperty(target, prop) {
+    if (prop.startsWith('_')) {
+      throw new Error(`Cannot delete private property ${prop}`);
+    }
+    delete target[prop];
+    return true;
+  }
+});
+
+delete proxy.public;     // OK
+delete proxy._private;   // Error: Cannot delete private property _private
+```
+
+#### 5. apply - 拦截函数调用
+
+```javascript
+function sum(a, b) {
+  return a + b;
+}
+
+const proxy = new Proxy(sum, {
+  apply(target, thisArg, args) {
+    console.log(`Called with args: ${args}`);
+    return target.apply(thisArg, args) * 2;  // 双倍结果
+  }
+});
+
+console.log(proxy(1, 2));  // Called with args: 1,2 然后输出 6
+```
+
+#### 6. construct - 拦截new操作符
+
+```javascript
+class Person {
+  constructor(name) {
+    this.name = name;
+  }
+}
+
+const ProxyPerson = new Proxy(Person, {
+  construct(target, args) {
+    console.log(`Creating instance with args: ${args}`);
+    return new target(...args);
+  }
+});
+
+const person = new ProxyPerson('John');  // Creating instance with args: John
+```
+
+### 实际应用场景
+
+#### 1. 数据验证
+
+```javascript
+const createValidator = (target) => {
+  return new Proxy(target, {
+    set(target, prop, value) {
+      const schema = target._schema || {};
+      if (schema[prop]) {
+        const { type, required, min, max } = schema[prop];
+        if (required && (value === undefined || value === null)) {
+          throw new Error(`${prop} is required`);
+        }
+        if (value !== undefined && typeof value !== type) {
+          throw new TypeError(`${prop} must be of type ${type}`);
+        }
+      }
+      target[prop] = value;
+      return true;
+    }
+  });
+};
+
+const user = createValidator({
+  _schema: {
+    name: { type: 'string', required: true },
+    age: { type: 'number', min: 0, max: 150 }
+  }
+});
+```
+
+#### 2. 私有属性保护
+
+```javascript
+const withPrivacy = (obj) => {
+  return new Proxy(obj, {
+    get(target, prop) {
+      if (typeof prop === 'string' && prop.startsWith('_')) {
+        throw new Error(`Private property ${prop} is not accessible`);
+      }
+      return target[prop];
+    },
+    set(target, prop, value) {
+      if (typeof prop === 'string' && prop.startsWith('_')) {
+        throw new Error(`Private property ${prop} is not accessible`);
+      }
+      target[prop] = value;
+      return true;
+    }
+  });
+};
+```
+
+#### 3. 响应式数据（简化版Vue3实现原理）
+
+```javascript
+const createReactive = (target, callback) => {
+  return new Proxy(target, {
+    set(target, prop, value) {
+      const oldValue = target[prop];
+      target[prop] = value;
+      if (oldValue !== value) {
+        callback(prop, value, oldValue);
+      }
+      return true;
+    }
+  });
+};
+
+const data = createReactive({ count: 0 }, (key, newVal, oldVal) => {
+  console.log(`${key} changed from ${oldVal} to ${newVal}`);
+});
+
+data.count = 1;  // "count changed from 0 to 1"
+```
+
+#### 4. 日志/性能监控
+
+```javascript
+const withLogging = (fn) => {
+  return new Proxy(fn, {
+    apply(target, thisArg, args) {
+      console.log(`Calling ${target.name} with`, args);
+      const start = performance.now();
+      const result = target.apply(thisArg, args);
+      const end = performance.now();
+      console.log(`${target.name} took ${end - start}ms`);
+      return result;
+    }
+  });
+};
+
+const slowFunction = withLogging(function compute(n) {
+  let sum = 0;
+  for (let i = 0; i < n; i++) sum += i;
+  return sum;
+});
+```
+
+### Proxy vs Object.defineProperty
+
+| 特性 | Proxy | Object.defineProperty |
+|------|-------|----------------------|
+| 拦截能力 | 13种拦截器 | 主要是getter/setter |
+| 新增属性 | 自动拦截 | 需要预先定义 |
+| 数组操作 | 原生支持 | 需要特殊处理 |
+| 嵌套对象 | 需要递归代理 | 需要递归定义 |
+| 兼容性 | ES6+ | ES5+ |
+
+### 注意事项
+
+```javascript
+// 1. Proxy不等同于原对象
+const obj = {};
+const proxy = new Proxy(obj, {});
+console.log(proxy === obj);  // false
+
+// 2. 嵌套对象需要递归代理
+const deepProxy = (obj) => {
+  return new Proxy(obj, {
+    get(target, prop) {
+      const value = target[prop];
+      if (typeof value === 'object' && value !== null) {
+        return deepProxy(value);  // 递归代理
+      }
+      return value;
+    }
+  });
+};
+
+// 3. 部分操作无法拦截
+const proxy = new Proxy({}, {});
+typeof proxy;       // 无法拦截
+proxy instanceof Object;  // 无法拦截
+```
+
+---
+
+## 52. ES6 Reflect是什么？有什么作用？
+
+### 什么是Reflect？
+
+Reflect是ES6引入的一个内置对象，它提供了一组用于操作对象的静态方法，与Proxy的拦截器方法一一对应。Reflect不是一个函数对象，因此不能new，它的所有方法都是静态的。
+
+### Reflect的设计目的
+
+1. **将Object上的方法集中到Reflect上**（如`Object.defineProperty` → `Reflect.defineProperty`）
+2. **修改某些Object方法的返回结果**，使其更合理
+3. **与Proxy配合**，完成默认行为，作为函数式编程的基础
+
+### 常用方法
+
+#### 1. Reflect.get() - 获取属性值
+
+```javascript
+const obj = { x: 1, y: 2 };
+
+// 传统方式
+obj.x;  // 1
+
+// Reflect方式
+Reflect.get(obj, 'x');  // 1
+
+// 访问getter
+const obj2 = {
+  _name: 'John',
+  get name() {
+    return this._name;
+  }
+};
+const receiver = { _name: 'Jane' };
+Reflect.get(obj2, 'name', receiver);  // "Jane" - 指定this值
+```
+
+#### 2. Reflect.set() - 设置属性值
+
+```javascript
+const obj = {};
+
+// 传统方式
+obj.x = 1;
+
+// Reflect方式
+Reflect.set(obj, 'x', 1);  // true
+
+// 在setter中指定this
+const obj2 = {
+  _age: 0,
+  set age(value) {
+    this._age = value;
+  }
+};
+const receiver = {};
+Reflect.set(obj2, 'age', 25, receiver);
+console.log(receiver._age);  // 25
+```
+
+#### 3. Reflect.has() - 检查属性（in操作符）
+
+```javascript
+const obj = { x: 1 };
+
+// 传统方式
+'x' in obj;  // true
+
+// Reflect方式
+Reflect.has(obj, 'x');  // true
+```
+
+#### 4. Reflect.deleteProperty() - 删除属性
+
+```javascript
+const obj = { x: 1, y: 2 };
+
+// 传统方式
+delete obj.x;
+
+// Reflect方式
+Reflect.deleteProperty(obj, 'y');  // true
+```
+
+#### 5. Reflect.defineProperty() - 定义属性
+
+```javascript
+const obj = {};
+
+// 传统方式
+Object.defineProperty(obj, 'x', {
+  value: 1,
+  writable: false
+});
+
+// Reflect方式 - 返回boolean而不是抛出错误
+const success = Reflect.defineProperty(obj, 'y', {
+  value: 2,
+  writable: false
+});
+console.log(success);  // true
+```
+
+#### 6. Reflect.getOwnPropertyDescriptor() - 获取属性描述符
+
+```javascript
+const obj = { x: 1 };
+
+Reflect.getOwnPropertyDescriptor(obj, 'x');
+// { value: 1, writable: true, enumerable: true, configurable: true }
+```
+
+#### 7. Reflect.getPrototypeOf() / Reflect.setPrototypeOf()
+
+```javascript
+const obj = {};
+const proto = { x: 1 };
+
+// 设置原型
+Reflect.setPrototypeOf(obj, proto);
+
+// 获取原型
+Reflect.getPrototypeOf(obj) === proto;  // true
+```
+
+#### 8. Reflect.apply() - 调用函数
+
+```javascript
+function greet(name) {
+  return `Hello, ${name}!`;
+}
+
+// 传统方式
+greet.call(null, 'World');
+greet.apply(null, ['World']);
+
+// Reflect方式
+Reflect.apply(greet, null, ['World']);  // "Hello, World!"
+
+// 实际应用：调用Math方法
+const nums = [1, 5, 3, 2, 4];
+Reflect.apply(Math.max, null, nums);  // 5
+```
+
+#### 9. Reflect.construct() - new操作符
+
+```javascript
+function Person(name) {
+  this.name = name;
+}
+
+// 传统方式
+const p1 = new Person('John');
+
+// Reflect方式
+const p2 = Reflect.construct(Person, ['Jane']);
+
+// 指定原型
+const p3 = Reflect.construct(Person, ['Bob'], OtherClass);
+```
+
+#### 10. Reflect.ownKeys() - 获取所有自身属性键
+
+```javascript
+const sym = Symbol('sym');
+const obj = {
+  a: 1,
+  b: 2,
+  [sym]: 3
+};
+
+// 获取所有自身属性（包括Symbol和不可枚举）
+Reflect.ownKeys(obj);  // ['a', 'b', Symbol(sym)]
+
+// 对比其他方法
+Object.keys(obj);           // ['a', 'b'] - 仅可枚举字符串键
+Object.getOwnPropertyNames(obj);   // ['a', 'b'] - 所有字符串键
+Object.getOwnPropertySymbols(obj); // [Symbol(sym)] - 所有Symbol键
+```
+
+### Reflect与Proxy的配合
+
+```javascript
+const handler = {
+  get(target, prop, receiver) {
+    console.log(`Getting ${prop}`);
+    // 使用Reflect完成默认行为
+    return Reflect.get(target, prop, receiver);
+  },
+  set(target, prop, value, receiver) {
+    console.log(`Setting ${prop} = ${value}`);
+    return Reflect.set(target, prop, value, receiver);
+  },
+  deleteProperty(target, prop) {
+    console.log(`Deleting ${prop}`);
+    return Reflect.deleteProperty(target, prop);
+  }
+};
+
+const proxy = new Proxy({ x: 1 }, handler);
+proxy.x;       // Getting x, 返回 1
+proxy.x = 2;   // Setting x = 2, 返回 true
+delete proxy.x; // Deleting x, 返回 true
+```
+
+### 实际应用场景
+
+#### 1. 更安全的属性操作
+
+```javascript
+// Object.defineProperty失败时抛出错误
+try {
+  Object.defineProperty(obj, 'x', { value: 1 });
+} catch (e) {
+  // 处理错误
+}
+
+// Reflect.defineProperty失败时返回false
+if (!Reflect.defineProperty(obj, 'x', { value: 1 })) {
+  // 处理失败
+}
+```
+
+#### 2. 函数式编程工具
+
+```javascript
+// 使用Reflect.apply进行函数式操作
+const nums = [[1, 2, 3], [4, 5], [6]];
+const sums = nums.map(arr => Reflect.apply(Array.prototype.reduce, arr, [(a, b) => a + b, 0]));
+// [6, 9, 6]
+```
+
+#### 3. 元编程工具
+
+```javascript
+// 获取对象的所有属性（包括Symbol）
+function getAllProperties(obj) {
+  const properties = new Set();
+  let current = obj;
+  while (current !== null) {
+    Reflect.ownKeys(current).forEach(key => properties.add(key));
+    current = Reflect.getPrototypeOf(current);
+  }
+  return [...properties];
+}
+```
+
+### Reflect的优势总结
+
+| 方法 | Object方式 | Reflect方式 | 优势 |
+|------|-----------|-------------|------|
+| defineProperty | 抛出错误 | 返回boolean | 更友好的错误处理 |
+| set/get | 直接操作 | 返回boolean/值 | 函数式风格 |
+| deleteProperty | delete操作符 | 返回boolean | 可编程 |
+| has | in操作符 | 返回boolean | 函数式风格 |
+| ownKeys | 多个方法组合 | 一个方法获取所有键 | 更统一 |
+
+### 兼容性
+
+- **现代浏览器**：完全支持
+- **Node.js**：6.0+ 支持大部分方法
+- **IE**：不支持（需要polyfill）

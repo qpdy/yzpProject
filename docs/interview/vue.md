@@ -56,6 +56,11 @@ title: Vue（面试要点）
 - [Vue 3中的异步组件和Suspense配合使用](#48-vue-3中的异步组件和suspense配合使用)
 - [Vue 3中的自定义Hooks开发](#49-vue-3中的自定义hooks开发)
 - [Vue 3中的响应式API深入解析](#50-vue-3中的响应式api深入解析)
+- [Vue插槽（Slot）是什么？有哪些类型？](#51-vue插槽slot是什么有哪些类型)
+- [什么是虚拟DOM？它的作用是什么？](#52-什么是虚拟dom它的作用是什么)
+- [Vue的Diff算法原理是什么？](#53-vue的diff算法原理是什么)
+- [Vue中的过滤器（Filters）是什么？如何使用？](#54-vue中的过滤器filters是什么如何使用)
+- [Vue中的Mixin是什么？有什么优缺点？](#55-vue中的mixin是什么有什么优缺点)
 
 ---
 
@@ -4883,3 +4888,751 @@ Vue为v-model提供了几个内置修饰符：
 1. **在Vue 3中迁移**：如果从Vue 2升级到Vue 3，需要更新组件中的prop名和事件名
 2. **表单元素兼容性**：v-model会忽略所有表单元素的value、checked、selected attribute的初始值，始终将Vue实例的数据作为数据来源
 3. **修饰符使用**：根据实际需求选择合适的修饰符，提高用户体验
+
+---
+
+## 51. Vue插槽（Slot）是什么？有哪些类型？
+
+### 什么是插槽？
+
+插槽（Slot）是Vue组件的一种内容分发机制，允许父组件向子组件传递模板内容。它让组件更加灵活，可以复用组件结构同时自定义部分内容。
+
+### 插槽的类型
+
+#### 1. 默认插槽（匿名插槽）
+
+没有指定名称的插槽，一个组件只能有一个默认插槽。
+
+```vue
+<!-- 子组件 Child.vue -->
+<template>
+  <div class="card">
+    <h3>卡片标题</h3>
+    <!-- 插槽出口 -->
+    <slot>默认内容</slot>
+  </div>
+</template>
+
+<!-- 父组件 -->
+<template>
+  <Child>
+    <p>这是插入到插槽的内容</p>
+  </Child>
+</template>
+```
+
+#### 2. 具名插槽（Named Slots）
+
+带有名称的插槽，一个组件可以有多个具名插槽。
+
+```vue
+<!-- 子组件 Layout.vue -->
+<template>
+  <div class="layout">
+    <header>
+      <slot name="header">默认头部</slot>
+    </header>
+    <main>
+      <slot>默认主体内容</slot>
+    </main>
+    <footer>
+      <slot name="footer">默认底部</slot>
+    </footer>
+  </div>
+</template>
+
+<!-- 父组件 -->
+<template>
+  <Layout>
+    <template #header>
+      <h1>自定义头部</h1>
+    </template>
+
+    <p>主体内容（默认插槽）</p>
+
+    <template #footer>
+      <p>自定义底部</p>
+    </template>
+  </Layout>
+</template>
+```
+
+**Vue 2语法**：使用`slot="name"`和`slot-scope`
+**Vue 3语法**：使用`v-slot:name`或简写`#name`
+
+#### 3. 作用域插槽（Scoped Slots）
+
+子组件向父组件传递数据，让父组件可以访问子组件的内部状态。
+
+```vue
+<!-- 子组件 List.vue -->
+<template>
+  <ul>
+    <li v-for="item in items" :key="item.id">
+      <slot :item="item" :index="index">
+        {{ item.name }}
+      </slot>
+    </li>
+  </ul>
+</template>
+
+<script>
+export default {
+  data() {
+    return {
+      items: [
+        { id: 1, name: 'Item 1', price: 100 },
+        { id: 2, name: 'Item 2', price: 200 }
+      ]
+    }
+  }
+}
+</script>
+
+<!-- 父组件 -->
+<template>
+  <List v-slot="{ item, index }">
+    <span>{{ index + 1 }}. {{ item.name }} - ¥{{ item.price }}</span>
+  </List>
+</template>
+```
+
+#### 4. 动态插槽名
+
+Vue 2.6+ 支持动态插槽名。
+
+```vue
+<template>
+  <base-layout>
+    <template v-slot:[dynamicSlotName]>
+      动态插槽内容
+    </template>
+  </base-layout>
+</template>
+```
+
+### 插槽的工作原理
+
+```
+编译阶段：
+1. 父组件模板中的插槽内容编译为渲染函数
+2. 子组件的<slot>标签作为占位符
+3. 渲染时将父组件的vnode插入到子组件的slot位置
+```
+
+### 使用场景
+
+| 类型 | 使用场景 |
+|------|----------|
+| 默认插槽 | 组件只有一处需要自定义内容 |
+| 具名插槽 | 组件有多处需要分别自定义（如布局组件） |
+| 作用域插槽 | 需要子组件数据来渲染自定义内容（如表格、列表） |
+
+---
+
+## 52. 什么是虚拟DOM？它的作用是什么？
+
+### 什么是虚拟DOM？
+
+虚拟DOM（Virtual DOM）是对真实DOM的抽象表示，是一个轻量级的JavaScript对象树，它描述了真实DOM的结构和属性。
+
+```javascript
+// 真实DOM
+<div id="app" class="container">
+  <p>Hello World</p>
+</div>
+
+// 对应的虚拟DOM（简化表示）
+{
+  tag: 'div',
+  props: { id: 'app', class: 'container' },
+  children: [
+    {
+      tag: 'p',
+      props: {},
+      children: ['Hello World']
+    }
+  ]
+}
+```
+
+### 虚拟DOM的作用
+
+#### 1. 提高性能
+
+直接操作真实DOM代价昂贵，虚拟DOM通过Diff算法最小化真实DOM操作。
+
+```
+操作类型        耗时
+直接操作DOM     ~10ms
+操作虚拟DOM     ~0.1ms
+```
+
+#### 2. 跨平台能力
+
+虚拟DOM可以映射到不同平台：
+- **浏览器**：渲染为真实DOM
+- **服务端**：渲染为HTML字符串（SSR）
+- **移动端**：渲染为原生组件（Weex、uni-app）
+- **小程序**：渲染为小程序视图
+
+#### 3. 编程便利性
+
+无需手动操作DOM，通过数据驱动视图更新。
+
+### 虚拟DOM的工作流程
+
+```
+1. 创建阶段
+   组件渲染 → 创建VNode树 → 转换为真实DOM → 挂载到页面
+
+2. 更新阶段
+   数据变化 → 创建新VNode树 → Diff比较 → 生成补丁 → 更新真实DOM
+```
+
+### Vue中的虚拟DOM实现
+
+```javascript
+// Vue 2 - VNode结构
+{
+  tag: 'div',           // 标签名或组件
+  data: { ... },        // 属性、事件、样式等
+  children: [ ... ],    // 子节点
+  text: undefined,      // 文本内容
+  elm: undefined,       // 对应的真实DOM
+  key: undefined        // 用于Diff的key
+}
+
+// Vue 3 - 优化后的VNode
+{
+  type: 'div',          // 节点类型
+  props: { ... },       // 属性
+  children: [ ... ],    // 子节点
+  key: null,
+  shapeFlag: 9,         // 形状标记（优化）
+  patchFlag: 1          // 补丁标记（优化）
+}
+```
+
+### Vue 3对虚拟DOM的优化
+
+#### 1. 静态提升（Static Hoisting）
+
+将静态节点提升到渲染函数之外，避免重复创建。
+
+```vue
+<template>
+  <div>
+    <h1>静态标题</h1>  <!-- 静态提升 -->
+    <p>{{ dynamic }}</p>  <!-- 动态节点 -->
+  </div>
+</template>
+```
+
+#### 2. Patch Flags
+
+标记动态节点类型，Diff时跳过静态节点。
+
+```javascript
+// 编译后
+function render() {
+  return (_openBlock(), _createBlock('div', null, [
+    _createVNode('h1', null, '静态标题'),
+    _createVNode('p', null, _toDisplayString(dynamic), 1 /* TEXT */)
+  ]))
+}
+```
+
+#### 3. 事件缓存
+
+缓存事件处理函数，避免重新创建。
+
+---
+
+## 53. Vue的Diff算法原理是什么？
+
+### 什么是Diff算法？
+
+Diff算法是比较两棵虚拟DOM树（新旧VNode），找出它们之间的差异，然后只更新需要变化的部分到真实DOM。
+
+### Diff算法的特点
+
+#### 1. 同级比较
+
+只比较同一层级的节点，不会跨层级比较。
+
+```
+旧树：          新树：
+    A              A
+   / \            / \
+  B   C    →     D   C
+     /              /
+    D              E
+
+只比较A-A、B-D、C-C，不会考虑B变成D的情况
+```
+
+#### 2. 深度优先
+
+先比较完当前节点的所有子节点，再比较兄弟节点。
+
+### Diff算法流程
+
+#### 1. 节点比较（patch）
+
+```javascript
+function patch(oldVnode, newVnode) {
+  // 1. 如果是相同节点（key和tag相同）
+  if (sameVnode(oldVnode, newVnode)) {
+    patchVnode(oldVnode, newVnode)
+  } else {
+    // 2. 不同节点，直接替换
+    const oldElm = oldVnode.elm
+    const parentElm = oldElm.parentNode
+
+    createElm(newVnode)  // 创建新节点
+    parentElm.insertBefore(newVnode.elm, oldElm)
+    parentElm.removeChild(oldElm)
+  }
+}
+```
+
+#### 2. 相同节点更新（patchVnode）
+
+```javascript
+function patchVnode(oldVnode, newVnode) {
+  const elm = newVnode.elm = oldVnode.elm
+
+  // 1. 如果新节点是文本节点
+  if (newVnode.text) {
+    if (newVnode.text !== oldVnode.text) {
+      elm.textContent = newVnode.text
+    }
+  } else {
+    // 2. 更新属性
+    updateProps(oldVnode, newVnode)
+
+    // 3. 更新子节点
+    const oldCh = oldVnode.children
+    const newCh = newVnode.children
+
+    if (oldCh && newCh) {
+      // 都有子节点，进行Diff
+      updateChildren(elm, oldCh, newCh)
+    } else if (newCh) {
+      // 新增子节点
+      addVnodes(elm, null, newCh, 0, newCh.length - 1)
+    } else if (oldCh) {
+      // 删除子节点
+      removeVnodes(elm, oldCh, 0, oldCh.length - 1)
+    }
+  }
+}
+```
+
+#### 3. 子节点更新（updateChildren）- 双端比较
+
+```javascript
+function updateChildren(parentElm, oldCh, newCh) {
+  let oldStartIdx = 0
+  let oldEndIdx = oldCh.length - 1
+  let newStartIdx = 0
+  let newEndIdx = newCh.length - 1
+
+  let oldStartVnode = oldCh[0]
+  let oldEndVnode = oldCh[oldEndIdx]
+  let newStartVnode = newCh[0]
+  let newEndVnode = newCh[newEndIdx]
+
+  while (oldStartIdx <= oldEndIdx && newStartIdx <= newEndIdx) {
+    // 四种比较情况
+    if (sameVnode(oldStartVnode, newStartVnode)) {
+      // 旧头 vs 新头
+      patchVnode(oldStartVnode, newStartVnode)
+      oldStartVnode = oldCh[++oldStartIdx]
+      newStartVnode = newCh[++newStartIdx]
+    } else if (sameVnode(oldEndVnode, newEndVnode)) {
+      // 旧尾 vs 新尾
+      patchVnode(oldEndVnode, newEndVnode)
+      oldEndVnode = oldCh[--oldEndIdx]
+      newEndVnode = newCh[--newEndIdx]
+    } else if (sameVnode(oldStartVnode, newEndVnode)) {
+      // 旧头 vs 新尾（需要移动）
+      patchVnode(oldStartVnode, newEndVnode)
+      parentElm.insertBefore(oldStartVnode.elm, oldEndVnode.elm.nextSibling)
+      oldStartVnode = oldCh[++oldStartIdx]
+      newEndVnode = newCh[--newEndIdx]
+    } else if (sameVnode(oldEndVnode, newStartVnode)) {
+      // 旧尾 vs 新头（需要移动）
+      patchVnode(oldEndVnode, newStartVnode)
+      parentElm.insertBefore(oldEndVnode.elm, oldStartVnode.elm)
+      oldEndVnode = oldCh[--oldEndIdx]
+      newStartVnode = newCh[++newStartIdx]
+    } else {
+      // 以上都不匹配，使用key查找
+      const idxInOld = findIdxInOld(newStartVnode, oldCh, oldStartIdx, oldEndIdx)
+      if (idxInOld) {
+        // 找到，移动节点
+        const vnodeToMove = oldCh[idxInOld]
+        patchVnode(vnodeToMove, newStartVnode)
+        parentElm.insertBefore(vnodeToMove.elm, oldStartVnode.elm)
+        oldCh[idxInOld] = undefined
+      } else {
+        // 没找到，创建新节点
+        createElm(newStartVnode, parentElm, oldStartVnode.elm)
+      }
+      newStartVnode = newCh[++newStartIdx]
+    }
+  }
+
+  // 处理剩余节点
+  if (oldStartIdx > oldEndIdx) {
+    // 新增节点
+    addVnodes(parentElm, newCh, newStartIdx, newEndIdx)
+  } else if (newStartIdx > newEndIdx) {
+    // 删除节点
+    removeVnodes(parentElm, oldCh, oldStartIdx, oldEndIdx)
+  }
+}
+```
+
+### 为什么需要key？
+
+```vue
+<!-- 没有key -->
+<ul>
+  <li v-for="item in list">{{ item.name }}</li>
+</ul>
+
+<!-- 有key -->
+<ul>
+  <li v-for="item in list" :key="item.id">{{ item.name }}</li>
+</ul>
+```
+
+| 场景 | 无key | 有key |
+|------|-------|-------|
+| 列表顺序改变 | 全部重新渲染 | 只移动节点 |
+| 性能 | 差 | 好 |
+| 组件状态 | 可能错乱 | 保持正确 |
+
+**不要使用index作为key！**
+
+### Vue 3 Diff算法优化
+
+1. **静态标记**：跳过静态节点的比较
+2. **PatchFlag**：只比较动态部分
+3. **最长递增子序列（LIS）**：优化节点移动
+
+---
+
+## 54. Vue中的过滤器（Filters）是什么？如何使用？
+
+### 什么是过滤器？
+
+过滤器是Vue中用于文本格式化的功能，可以在插值表达式和v-bind表达式中使用。
+
+**注意**：Vue 3已移除过滤器，推荐使用计算属性或方法替代。
+
+### Vue 2中的过滤器
+
+#### 1. 定义过滤器
+
+```javascript
+// 全局过滤器
+Vue.filter('capitalize', function(value) {
+  if (!value) return ''
+  value = value.toString()
+  return value.charAt(0).toUpperCase() + value.slice(1)
+})
+
+// 局部过滤器
+export default {
+  filters: {
+    capitalize(value) {
+      if (!value) return ''
+      return value.charAt(0).toUpperCase() + value.slice(1)
+    }
+  }
+}
+```
+
+#### 2. 使用过滤器
+
+```vue
+<template>
+  <!-- 在插值中使用 -->
+  <p>{{ message | capitalize }}</p>
+
+  <!-- 在v-bind中使用 -->
+  <div :id="rawId | formatId"></div>
+
+  <!-- 链式调用 -->
+  <p>{{ message | capitalize | reverse }}</p>
+
+  <!-- 传参 -->
+  <p>{{ accountBalance | currency('USD') }}</p>
+</template>
+```
+
+#### 3. 常用过滤器示例
+
+```javascript
+// 日期格式化
+Vue.filter('formatDate', (value, format = 'YYYY-MM-DD') => {
+  return moment(value).format(format)
+})
+
+// 千分位分隔
+Vue.filter('thousands', (value) => {
+  return value.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+})
+
+// 文件大小格式化
+Vue.filter('fileSize', (bytes) => {
+  if (bytes === 0) return '0 B'
+  const k = 1024
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB']
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+})
+```
+
+### Vue 3中的替代方案
+
+```vue
+<script setup>
+import { computed } from 'vue'
+
+const props = defineProps({
+  message: String
+})
+
+// 使用计算属性替代过滤器
+const capitalizedMessage = computed(() => {
+  if (!props.message) return ''
+  return props.message.charAt(0).toUpperCase() + props.message.slice(1)
+})
+
+// 或使用全局方法
+const formatDate = (date, format = 'YYYY-MM-DD') => {
+  return moment(date).format(format)
+}
+</script>
+
+<template>
+  <p>{{ capitalizedMessage }}</p>
+  <p>{{ formatDate(createTime) }}</p>
+</template>
+```
+
+---
+
+## 55. Vue中的Mixin是什么？有什么优缺点？
+
+### 什么是Mixin？
+
+Mixin是Vue中一种代码复用机制，允许将组件的选项（data、methods、computed等）混入到其他组件中。
+
+### Mixin的使用
+
+#### 1. 定义Mixin
+
+```javascript
+// mixins/common.js
+export const commonMixin = {
+  data() {
+    return {
+      loading: false,
+      error: null
+    }
+  },
+  methods: {
+    showLoading() {
+      this.loading = true
+    },
+    hideLoading() {
+      this.loading = false
+    },
+    handleError(error) {
+      this.error = error.message
+      console.error(error)
+    }
+  },
+  created() {
+    console.log('Mixin created')
+  }
+}
+
+// mixins/pagination.js
+export const paginationMixin = {
+  data() {
+    return {
+      page: 1,
+      pageSize: 10,
+      total: 0,
+      list: []
+    }
+  },
+  methods: {
+    handlePageChange(page) {
+      this.page = page
+      this.fetchData()
+    },
+    handleSizeChange(size) {
+      this.pageSize = size
+      this.page = 1
+      this.fetchData()
+    }
+  }
+}
+```
+
+#### 2. 使用Mixin
+
+```vue
+<script>
+import { commonMixin, paginationMixin } from '@/mixins'
+
+export default {
+  mixins: [commonMixin, paginationMixin],
+  data() {
+    return {
+      userList: []
+    }
+  },
+  created() {
+    // 会先执行mixin的created，再执行组件的created
+    console.log('Component created')
+    this.fetchData()
+  },
+  methods: {
+    async fetchData() {
+      this.showLoading()
+      try {
+        const res = await api.getUsers({
+          page: this.page,
+          pageSize: this.pageSize
+        })
+        this.userList = res.data.list
+        this.total = res.data.total
+      } catch (error) {
+        this.handleError(error)
+      } finally {
+        this.hideLoading()
+      }
+    }
+  }
+}
+</script>
+```
+
+### 选项合并策略
+
+当组件和Mixin有同名选项时，Vue按以下规则合并：
+
+| 选项 | 合并策略 |
+|------|----------|
+| data | 递归合并，组件数据优先 |
+| methods/computed | 组件覆盖Mixin |
+| 生命周期钩子 | 合并成数组，先执行Mixin |
+| components/directives | 组件优先 |
+| watch | 合并成数组 |
+
+```javascript
+const mixin = {
+  data() {
+    return { msg: 'mixin', count: 1 }
+  },
+  created() {
+    console.log('mixin created')
+  },
+  methods: {
+    foo() { console.log('mixin foo') }
+  }
+}
+
+export default {
+  mixins: [mixin],
+  data() {
+    return { msg: 'component' }  // 覆盖mixin的msg
+  },
+  created() {
+    console.log('component created')
+    // 输出顺序：mixin created → component created
+  },
+  methods: {
+    foo() { console.log('component foo') }  // 覆盖mixin的foo
+  }
+}
+```
+
+### Mixin的缺点
+
+#### 1. 命名冲突
+
+多个Mixin可能定义同名属性或方法。
+
+```javascript
+const mixinA = { methods: { handleClick() {} } }
+const mixinB = { methods: { handleClick() {} } }
+// 后者会覆盖前者
+```
+
+#### 2. 数据来源不明确
+
+组件中使用的属性可能来自Mixin，难以追踪。
+
+#### 3. 隐式依赖
+
+Mixin之间可能存在隐式依赖关系。
+
+### Vue 3的替代方案：Composition API
+
+```vue
+<script setup>
+// composables/useCommon.js
+import { ref } from 'vue'
+
+export function useCommon() {
+  const loading = ref(false)
+  const error = ref(null)
+
+  const showLoading = () => loading.value = true
+  const hideLoading = () => loading.value = false
+  const handleError = (err) => {
+    error.value = err.message
+    console.error(err)
+  }
+
+  return { loading, error, showLoading, hideLoading, handleError }
+}
+
+// composables/usePagination.js
+import { ref } from 'vue'
+
+export function usePagination() {
+  const page = ref(1)
+  const pageSize = ref(10)
+  const total = ref(0)
+
+  const setPage = (p) => { page.value = p }
+  const setPageSize = (s) => { pageSize.value = s; page.value = 1 }
+
+  return { page, pageSize, total, setPage, setPageSize }
+}
+
+// 组件中使用
+import { useCommon } from './composables/useCommon'
+import { usePagination } from './composables/usePagination'
+
+const { loading, showLoading, hideLoading } = useCommon()
+const { page, pageSize, setPage } = usePagination()
+</script>
+```
+
+**Composition API的优势：**
+- 明确的依赖关系
+- 更好的类型推断
+- 逻辑复用更清晰
+- 没有命名冲突问题

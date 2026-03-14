@@ -27,6 +27,15 @@ title: TypeScript（面试要点）
 - [TypeScript中的条件类型（Conditional Types）是什么？](#19-typescript中的条件类型conditional-types是什么)
 - [TypeScript中的模板字面量类型（Template Literal Types）是什么？](#20-typescript中的模板字面量类型template-literal-types是什么)
 - [TypeScript中的装饰器元数据（Decorator Metadata）如何使用？](#21-typescript中的装饰器元数据decorator-metadata如何使用)
+- [TypeScript中的`declare`关键字有什么用？](#22-typescript中的declare关键字有什么用)
+- [解释一下TypeScript中的枚举（Enum）](#23-解释一下typescript中的枚举enum)
+- [TypeScript中的方法重写（Override）是什么？](#24-typescript中的方法重写override是什么)
+- [什么是TypeScript Source Map（映射文件）？](#25-什么是typescript-source-map映射文件)
+- [TypeScript中的类类型接口是什么？](#26-typescript中的类类型接口是什么)
+- [TypeScript中`never`和`void`有什么区别？](#27-typescript中never和void有什么区别)
+- [如何在TypeScript中使用Mixin？](#28-如何在typescript中使用mixin)
+- [TypeScript中的类型断言是什么？](#29-typescript中的类型断言是什么)
+- [如何检查TypeScript中的null和undefined？](#30-如何检查typescript中的null和undefined)
 
 ---
 
@@ -2777,3 +2786,926 @@ class User {
 }
 
 这些是TypeScript中最重要的面试题和知识点。掌握这些内容将帮助你在TypeScript相关的面试中表现出色。
+
+---
+
+## 22. TypeScript中的`declare`关键字有什么用？
+
+### 什么是`declare`？
+
+`declare`关键字用于告诉TypeScript编译器某个变量、函数、类或模块已经存在，不需要在编译时生成实际的JavaScript代码。它主要用于类型声明文件（.d.ts）中。
+
+### 使用场景
+
+#### 1. 声明全局变量
+
+当使用第三方库（通过CDN引入）时：
+
+```typescript
+// 告诉TypeScript，window对象上有一个全局变量myLib
+declare const myLib: {
+  version: string;
+  doSomething(): void;
+};
+
+// 使用
+console.log(myLib.version);
+myLib.doSomething();
+```
+
+#### 2. 声明函数
+
+```typescript
+// 声明一个已经存在的函数
+declare function greet(name: string): string;
+
+// 使用
+const message = greet("TypeScript");
+```
+
+#### 3. 声明模块
+
+当导入没有类型定义的JavaScript模块时：
+
+```typescript
+// 为第三方库声明类型
+declare module "some-untyped-library" {
+  export function doSomething(): void;
+  export const version: string;
+}
+
+// 使用
+import { doSomething, version } from "some-untyped-library";
+```
+
+#### 4. 声明文件类型
+
+```typescript
+// 声明图片文件导入
+declare module "*.png" {
+  const value: string;
+  export default value;
+}
+
+declare module "*.svg" {
+  const content: React.FunctionComponent<React.SVGAttributes<SVGElement>>;
+  export default content;
+}
+```
+
+#### 5. 声明全局接口扩展
+
+```typescript
+// 扩展Window对象
+declare global {
+  interface Window {
+    myCustomProperty: string;
+    myCustomMethod(): void;
+  }
+}
+
+// 使用
+window.myCustomProperty = "hello";
+window.myCustomMethod();
+```
+
+### `declare` vs 实际定义
+
+| 特性 | `declare` | 实际定义 |
+|------|-----------|----------|
+| 编译输出 | 不产生JS代码 | 产生JS代码 |
+| 用途 | 类型声明 | 实现逻辑 |
+| 使用场景 | 类型定义文件 | 业务代码 |
+
+---
+
+## 23. 解释一下TypeScript中的枚举（Enum）
+
+### 什么是枚举？
+
+枚举（Enum）是一组命名常量的集合，用于定义一组有意义的数值。
+
+### 枚举的类型
+
+#### 1. 数字枚举
+
+```typescript
+enum Direction {
+  Up,      // 0
+  Down,    // 1
+  Left,    // 2
+  Right    // 3
+}
+
+// 手动设置起始值
+enum Direction2 {
+  Up = 1,  // 1
+  Down,    // 2
+  Left,    // 3
+  Right    // 4
+}
+
+// 全部手动赋值
+enum Status {
+  Success = 200,
+  NotFound = 404,
+  Error = 500
+}
+```
+
+#### 2. 字符串枚举
+
+```typescript
+enum Direction {
+  Up = "UP",
+  Down = "DOWN",
+  Left = "LEFT",
+  Right = "RIGHT"
+}
+
+console.log(Direction.Up); // "UP"
+```
+
+#### 3. 异构枚举
+
+```typescript
+enum Mixed {
+  No = 0,
+  Yes = "YES"
+}
+```
+
+### 枚举的特性
+
+#### 双向映射
+
+```typescript
+enum Color {
+  Red = 1,
+  Green,
+  Blue
+}
+
+// 正向映射
+console.log(Color.Red);    // 1
+console.log(Color.Green);  // 2
+
+// 反向映射（仅数字枚举）
+console.log(Color[1]);     // "Red"
+console.log(Color[2]);     // "Green"
+```
+
+#### const枚举
+
+```typescript
+// 编译时内联，不生成对象
+const enum Direction {
+  Up,
+  Down,
+  Left,
+  Right
+}
+
+const dir = Direction.Up;
+// 编译后：const dir = 0 /* Up */;
+```
+
+### 枚举的使用场景
+
+```typescript
+// HTTP状态码
+enum HttpStatus {
+  OK = 200,
+  Created = 201,
+  BadRequest = 400,
+  Unauthorized = 401,
+  NotFound = 404,
+  ServerError = 500
+}
+
+function handleResponse(status: HttpStatus) {
+  switch (status) {
+    case HttpStatus.OK:
+      return "请求成功";
+    case HttpStatus.NotFound:
+      return "资源不存在";
+    default:
+      return "未知错误";
+  }
+}
+
+// 权限管理
+enum Permission {
+  Read = 1 << 0,      // 1
+  Write = 1 << 1,     // 2
+  Execute = 1 << 2,   // 4
+  Delete = 1 << 3     // 8
+}
+
+const userPermission = Permission.Read | Permission.Write;
+```
+
+---
+
+## 24. TypeScript中的方法重写（Override）是什么？
+
+### 什么是方法重写？
+
+方法重写是指子类重新定义父类中已有的方法，以提供特定的实现。
+
+### 基本示例
+
+```typescript
+class Animal {
+  name: string;
+
+  constructor(name: string) {
+    this.name = name;
+  }
+
+  move(distance: number = 0) {
+    console.log(`${this.name} moved ${distance}m`);
+  }
+
+  makeSound() {
+    console.log("Some sound");
+  }
+}
+
+class Dog extends Animal {
+  constructor(name: string) {
+    super(name);
+  }
+
+  // 重写move方法
+  move(distance: number = 5) {
+    console.log("Running...");
+    super.move(distance); // 调用父类方法
+  }
+
+  // 重写makeSound方法
+  makeSound() {
+    console.log("Woof! Woof!");
+  }
+}
+
+const dog = new Dog("Buddy");
+dog.move();        // Running... Buddy moved 5m
+dog.makeSound();   // Woof! Woof!
+```
+
+### `override`关键字（TypeScript 4.3+）
+
+```typescript
+class Animal {
+  move() {
+    console.log("Moving");
+  }
+}
+
+class Dog extends Animal {
+  // 显式声明重写
+  override move() {
+    console.log("Running");
+  }
+}
+
+class Cat extends Animal {
+  // 错误！父类没有walk方法
+  override walk() {  // Error: This member cannot have an 'override' modifier
+    console.log("Walking");
+  }
+}
+```
+
+### 重写 vs 重载
+
+```typescript
+// 方法重载：同一个方法，多个签名
+class Calculator {
+  add(a: number, b: number): number;
+  add(a: string, b: string): string;
+  add(a: any, b: any): any {
+    return a + b;
+  }
+}
+
+// 方法重写：子类覆盖父类方法
+class Base {
+  greet() {
+    console.log("Hello");
+  }
+}
+
+class Derived extends Base {
+  override greet() {
+    console.log("Hello from Derived");
+  }
+}
+```
+
+---
+
+## 25. 什么是TypeScript Source Map（映射文件）？
+
+### 什么是Source Map？
+
+Source Map是一个映射文件，它建立了编译后的代码与源代码之间的映射关系，便于调试。
+
+### 为什么需要Source Map？
+
+```
+编译前（TypeScript）：          编译后（JavaScript）：
+┌──────────────────┐         ┌────────────────────┐
+│ let x: number    │         │ var x;             │
+│ x = 10;          │  ────▶  │ x = 10;            │
+│ console.log(x);  │         │ console.log(x);    │
+└──────────────────┘         └────────────────────┘
+
+Source Map: 建立行号、列号的映射关系
+```
+
+### 如何生成Source Map
+
+#### tsconfig.json配置
+
+```json
+{
+  "compilerOptions": {
+    "sourceMap": true,        // 生成.map文件
+    "inlineSourceMap": false, // 不内联到JS文件中
+    "sourceRoot": "/",        // 指定源文件根目录
+    "mapRoot": "/",           // 指定map文件根目录
+    "inlineSources": false    // 是否将源代码内联到map中
+  }
+}
+```
+
+### Source Map文件内容
+
+```json
+{
+  "version": 3,
+  "file": "app.js",
+  "sourceRoot": "",
+  "sources": ["app.ts"],
+  "names": ["console", "log"],
+  "mappings": "AAAA,OAAO,CAAC,GAAG,CAAC,QAAQ,CAAC,CAAC"
+}
+```
+
+### 使用场景
+
+```typescript
+// 开发环境
+{
+  "compilerOptions": {
+    "sourceMap": true,      // 开启，便于调试
+    "inlineSourceMap": false
+  }
+}
+
+// 生产环境
+{
+  "compilerOptions": {
+    "sourceMap": false,     // 关闭，减小文件体积
+    "inlineSourceMap": false
+  }
+}
+
+// 或生成单独的source map文件供错误追踪
+{
+  "compilerOptions": {
+    "sourceMap": true,
+    "sourceRoot": "https://cdn.example.com/source/"
+  }
+}
+```
+
+---
+
+## 26. TypeScript中的类类型接口是什么？
+
+### 什么是类类型接口？
+
+类类型接口是用于描述类的构造函数和实例成员的接口。
+
+### 实例接口
+
+描述类的实例应该具有的属性和方法：
+
+```typescript
+interface ClockInterface {
+  currentTime: Date;
+  setTime(d: Date): void;
+}
+
+class Clock implements ClockInterface {
+  currentTime: Date = new Date();
+
+  setTime(d: Date) {
+    this.currentTime = d;
+  }
+
+  constructor(h: number, m: number) {}
+}
+```
+
+### 构造函数接口
+
+描述类的构造函数签名：
+
+```typescript
+interface ClockConstructor {
+  new (hour: number, minute: number): ClockInterface;
+}
+
+interface ClockInterface {
+  tick(): void;
+}
+
+function createClock(
+  ctor: ClockConstructor,
+  hour: number,
+  minute: number
+): ClockInterface {
+  return new ctor(hour, minute);
+}
+
+class DigitalClock implements ClockInterface {
+  constructor(h: number, m: number) {}
+  tick() {
+    console.log("beep beep");
+  }
+}
+
+class AnalogClock implements ClockInterface {
+  constructor(h: number, m: number) {}
+  tick() {
+    console.log("tick tock");
+  }
+}
+
+let digital = createClock(DigitalClock, 12, 17);
+let analog = createClock(AnalogClock, 7, 32);
+```
+
+### 混合类型接口
+
+```typescript
+interface Counter {
+  (start: number): string;  // 可调用
+  interval: number;          // 属性
+  reset(): void;             // 方法
+}
+
+function getCounter(): Counter {
+  let counter = function (start: number) {} as Counter;
+  counter.interval = 123;
+  counter.reset = function () {};
+  return counter;
+}
+
+let c = getCounter();
+c(10);
+c.reset();
+c.interval = 5.0;
+```
+
+---
+
+## 27. TypeScript中`never`和`void`有什么区别？
+
+### `void`类型
+
+表示没有任何返回值，通常用于函数：
+
+```typescript
+function logMessage(message: string): void {
+  console.log(message);
+  // 没有return语句，或return undefined
+}
+
+let unusable: void = undefined;
+// void只能赋值为undefined或null（非严格模式）
+```
+
+### `never`类型
+
+表示永远不会发生的值，用于：
+1. 抛出异常的函数
+2. 无限循环的函数
+3. 类型守卫中穷尽性检查
+
+```typescript
+// 1. 抛出异常的函数
+function throwError(message: string): never {
+  throw new Error(message);
+}
+
+// 2. 无限循环
+function infiniteLoop(): never {
+  while (true) {}
+}
+
+// 3. 穷尽性检查
+function exhaustiveCheck(x: never): never {
+  throw new Error("Unexpected value: " + x);
+}
+
+type Shape =
+  | { kind: "circle"; radius: number }
+  | { kind: "square"; side: number };
+
+function getArea(shape: Shape): number {
+  switch (shape.kind) {
+    case "circle":
+      return Math.PI * shape.radius ** 2;
+    case "square":
+      return shape.side ** 2;
+    default:
+      // 穷尽性检查
+      return exhaustiveCheck(shape);
+  }
+}
+```
+
+### 对比总结
+
+| 特性 | `void` | `never` |
+|------|--------|---------|
+| 含义 | 无返回值 | 永远不会发生 |
+| 可赋值 | `undefined`/`null` | 任何类型都不能赋值给never |
+| 返回值 | 可以return或不return | 必须无法正常结束 |
+| 使用场景 | 普通函数 | 异常、死循环、类型保护 |
+
+---
+
+## 28. 如何在TypeScript中使用Mixin？
+
+### 什么是Mixin？
+
+Mixin是一种代码复用模式，允许将功能"混合"到类中，实现多重继承的效果。
+
+### 基础Mixin实现
+
+```typescript
+// 定义一个构造函数类型
+type Constructor<T = {}> = new (...args: any[]) => T;
+
+// 创建一个Mixin函数
+function Timestamped<TBase extends Constructor>(Base: TBase) {
+  return class extends Base {
+    timestamp = new Date();
+
+    getTimestamp() {
+      return this.timestamp;
+    }
+  };
+}
+
+function Activatable<TBase extends Constructor>(Base: TBase) {
+  return class extends Base {
+    isActivated = false;
+
+    activate() {
+      this.isActivated = true;
+    }
+
+    deactivate() {
+      this.isActivated = false;
+    }
+  };
+}
+
+// 基础类
+class User {
+  name: string;
+
+  constructor(name: string) {
+    this.name = name;
+  }
+}
+
+// 应用Mixin
+const TimestampedUser = Timestamped(User);
+const ActivatableTimestampedUser = Activatable(TimestampedUser);
+
+// 使用
+const user = new ActivatableTimestampedUser("John");
+console.log(user.name);           // "John"
+console.log(user.timestamp);      // Date对象
+user.activate();                  // 调用mixin方法
+console.log(user.isActivated);    // true
+```
+
+### 带类型的Mixin
+
+```typescript
+type Constructor<T = {}> = new (...args: any[]) => T;
+
+// 定义Mixin的接口
+interface Timestamped {
+  timestamp: Date;
+  getTimestamp(): Date;
+}
+
+interface Activatable {
+  isActivated: boolean;
+  activate(): void;
+  deactivate(): void;
+}
+
+// 带返回类型的Mixin
+function Timestamped<TBase extends Constructor>(Base: TBase): Constructor<Timestamped> & TBase {
+  return class extends Base implements Timestamped {
+    timestamp = new Date();
+
+    getTimestamp() {
+      return this.timestamp;
+    }
+  };
+}
+
+function Activatable<TBase extends Constructor>(Base: TBase): Constructor<Activatable> & TBase {
+  return class extends Base implements Activatable {
+    isActivated = false;
+
+    activate() {
+      this.isActivated = true;
+    }
+
+    deactivate() {
+      this.isActivated = false;
+    }
+  };
+}
+
+// 组合使用
+class Person {
+  constructor(public name: string) {}
+}
+
+const SpecialPerson = Activatable(Timestamped(Person));
+
+const person = new SpecialPerson("Alice");
+// person具有Person + Timestamped + Activatable的所有属性
+```
+
+### 实际应用场景
+
+```typescript
+// 可序列化Mixin
+function Serializable<TBase extends Constructor>(Base: TBase) {
+  return class extends Base {
+    serialize(): string {
+      return JSON.stringify(this);
+    }
+
+    static deserialize<T>(json: string): T {
+      return JSON.parse(json);
+    }
+  };
+}
+
+// 事件派发Mixin
+function EventEmitter<TBase extends Constructor>(Base: TBase) {
+  return class extends Base {
+    private listeners: Map<string, Function[]> = new Map();
+
+    on(event: string, callback: Function) {
+      if (!this.listeners.has(event)) {
+        this.listeners.set(event, []);
+      }
+      this.listeners.get(event)!.push(callback);
+    }
+
+    emit(event: string, ...args: any[]) {
+      const callbacks = this.listeners.get(event);
+      if (callbacks) {
+        callbacks.forEach(cb => cb(...args));
+      }
+    }
+  };
+}
+
+// 使用
+class Model {
+  id: number;
+  constructor(id: number) {
+    this.id = id;
+  }
+}
+
+const EnhancedModel = EventEmitter(Serializable(Model));
+
+const model = new EnhancedModel(1);
+model.on("change", () => console.log("Model changed!"));
+model.emit("change");
+console.log(model.serialize());
+```
+
+---
+
+## 29. TypeScript中的类型断言是什么？
+
+### 什么是类型断言？
+
+类型断言是一种告诉编译器"我知道自己在做什么"的方式，允许你手动指定一个值的类型。
+
+### 两种语法
+
+```typescript
+// 1. 尖括号语法
+let someValue: any = "this is a string";
+let strLength: number = (<string>someValue).length;
+
+// 2. as语法（推荐，尤其在JSX中）
+let someValue2: any = "this is a string";
+let strLength2: number = (someValue2 as string).length;
+```
+
+### 使用场景
+
+#### 1. 处理any类型
+
+```typescript
+function getLength(something: string | number): number {
+  if ((something as string).length) {
+    return (something as string).length;
+  } else {
+    return something.toString().length;
+  }
+}
+```
+
+#### 2. DOM操作
+
+```typescript
+const input = document.getElementById("myInput") as HTMLInputElement;
+input.value = "Hello";  // 可以访问value属性
+
+// 或者使用非空断言
+const button = document.querySelector(".btn")!;  // 告诉编译器一定不为null
+button.addEventListener("click", handler);
+```
+
+#### 3. 处理联合类型
+
+```typescript
+interface Bird {
+  fly(): void;
+  layEggs(): void;
+}
+
+interface Fish {
+  swim(): void;
+  layEggs(): void;
+}
+
+function getPet(): Bird | Fish {
+  // ...
+}
+
+let pet = getPet();
+(pet as Fish).swim();  // 断言为Fish类型
+```
+
+#### 4. 双重断言
+
+```typescript
+// 当类型完全不兼容时，可以先断言为unknown或any
+const str: string = "hello";
+const num = (str as unknown) as number;  // 双重断言
+```
+
+### 类型断言 vs 类型转换
+
+```typescript
+// 类型断言：只在编译时起作用，没有运行时影响
+let value: any = "hello";
+let len = (value as string).length;
+// 编译后的JS：var len = value.length;
+
+// 类型转换：有运行时影响
+let num = Number("123");  // 真的转换为数字
+```
+
+### 非空断言操作符 `!`
+
+```typescript
+function processEntity(e?: Entity) {
+  let s = e!.name;  // 断言e一定存在
+}
+
+// 与可选链的区别
+let x = e?.name;     // 如果e为null/undefined，返回undefined
+let y = e!.name;     // 断言e一定不为null/undefined
+```
+
+---
+
+## 30. 如何检查TypeScript中的null和undefined？
+
+### 严格空检查
+
+启用`strictNullChecks`选项后，TypeScript会严格区分可空类型和不可空类型。
+
+```json
+{
+  "compilerOptions": {
+    "strictNullChecks": true
+  }
+}
+```
+
+### 检查方法
+
+#### 1. 类型保护（Type Guards）
+
+```typescript
+function processValue(value: string | null | undefined) {
+  // 方法1：直接检查
+  if (value !== null && value !== undefined) {
+    console.log(value.toUpperCase());  // OK
+  }
+
+  // 方法2：宽松检查（同时排除null和undefined）
+  if (value != null) {
+    console.log(value.toUpperCase());  // OK
+  }
+
+  // 方法3：Truthy检查
+  if (value) {
+    console.log(value.toUpperCase());  // OK
+  }
+}
+```
+
+#### 2. 可选链操作符 `?.`
+
+```typescript
+interface User {
+  name?: string;
+  address?: {
+    city?: string;
+  };
+}
+
+function getCity(user: User): string | undefined {
+  return user.address?.city;
+  // 等价于：user.address ? user.address.city : undefined
+}
+```
+
+#### 3. 空值合并运算符 `??`
+
+```typescript
+const value = userInput ?? "default";
+// 等价于：userInput !== null && userInput !== undefined ? userInput : "default"
+
+// 与 || 的区别
+const count1 = 0 || 10;      // 10（0被视为falsy）
+const count2 = 0 ?? 10;      // 0（只有null/undefined才会使用默认值）
+```
+
+#### 4. 非空断言 `!`
+
+```typescript
+function getLength(str: string | null): number {
+  // 如果你确定str不为null
+  return str!.length;
+}
+```
+
+#### 5. 类型断言函数
+
+```typescript
+function assertIsDefined<T>(value: T): asserts value is NonNullable<T> {
+  if (value === undefined || value === null) {
+    throw new Error(`Expected 'value' to be defined, but received ${value}`);
+  }
+}
+
+function processData(data: string | null) {
+  assertIsDefined(data);  // 此后TypeScript知道data不为null
+  console.log(data.toUpperCase());  // OK
+}
+```
+
+### 实用工具类型
+
+```typescript
+// NonNullable<T>：从T中移除null和undefined
+type T0 = NonNullable<string | number | undefined>;  // string | number
+
+// 可选属性处理
+interface User {
+  name: string;
+  age?: number;
+}
+
+// Required<T>：将所有属性变为必需
+type RequiredUser = Required<User>;
+// { name: string; age: number; }
+```

@@ -17,9 +17,19 @@ title: 前端工程化面试题
 - [安全性](#安全性)
 - [面向对象编程](#面向对象编程)
 - [浏览器原理与HTTP](#浏览器原理与http)
+  - [什么是HTTP协议？其特点是什么？](#什么是http协议其特点是什么)
+  - [HTTP1.x vs HTTP2.0 vs HTTP3.0](#http1x-vs-http20-vs-http30)
+  - [HTTPS协议详解](#https协议详解)
+  - [常见的请求头和响应头](#常见的请求头和响应头)
+  - [Cookie、Session、Token、JWT详解](#cookiesessiontokenjwt详解)
+  - [OSI七层模型](#osi七层模型)
+  - [TCP三次握手和四次挥手详解](#tcp三次握手和四次挥手详解)
+  - [浏览器渲染原理详解](#浏览器渲染原理详解)
 - [小程序开发](#小程序开发)
 - [跨域与缓存](#跨域与缓存)
 - [其他工程化实践](#其他工程化实践)
+  - [对前端工程化的理解](#对前端工程化的理解)
+  - [对SSG的理解](#对ssg的理解)
 
 ---
 
@@ -265,6 +275,80 @@ optimization: {
 - 小型项目
 - 快速原型开发
 - 不想配置构建工具的项目
+
+### Webpack5主要升级点
+
+**1. 持久化缓存（Persistent Caching）**
+- 默认启用，构建速度大幅提升
+- 缓存位置：`node_modules/.cache/webpack`
+- 通过文件系统缓存模块和依赖
+
+**2. 长期缓存优化（Long Term Caching）**
+- 更稳定的 module id 和 chunk id
+- 使用 deterministic 模式替代 named/hashed
+- 小的代码变动不会导致 hash 变化
+
+**3. 更好的 Tree Shaking**
+- 支持嵌套 Tree Shaking
+- 支持 CommonJS 模块的 Tree Shaking
+- 改进副作用分析
+
+**4. Module Federation（模块联邦）**
+- 实现微前端架构
+- 运行时动态加载远程模块
+- 支持模块共享和版本管理
+
+```javascript
+// 模块联邦配置示例
+const ModuleFederationPlugin = require('webpack/lib/container/ModuleFederationPlugin');
+
+module.exports = {
+  plugins: [
+    new ModuleFederationPlugin({
+      name: 'host',
+      remotes: {
+        app1: 'app1@http://localhost:3001/remoteEntry.js',
+      },
+      shared: ['react', 'react-dom']
+    })
+  ]
+};
+```
+
+**5. 资源模块（Asset Modules）**
+- 内置处理资源文件，无需 file-loader/url-loader
+- `asset/resource`：输出单独文件
+- `asset/inline`：内联为 Data URI
+- `asset/source`：导出资源源码
+- `asset`：根据文件大小自动选择
+
+```javascript
+module.exports = {
+  module: {
+    rules: [
+      {
+        test: /\.(png|jpg|gif)$/i,
+        type: 'asset/resource'
+      }
+    ]
+  }
+};
+```
+
+**6. 废弃功能**
+- 不再自动 polyfill Node.js 核心模块
+- 移除 `node.Buffer`、`node.process` 等配置
+
+### 其他构建工具对比
+
+| 工具 | 特点 | 适用场景 |
+|------|------|----------|
+| **Webpack** | 功能全面，生态丰富 | 大型项目，复杂配置 |
+| **Vite** | 极速开发体验 | 现代浏览器项目 |
+| **Rollup** | 输出简洁，Tree Shaking好 | 库打包 |
+| **Parcel** | 零配置 | 快速原型开发 |
+| **esbuild** | Go编写，极速编译 | 简单打包，开发工具 |
+| **Turbopack** | Rust编写，Webpack继承者 | 下一代构建工具 |
 
 ---
 
@@ -1630,6 +1714,656 @@ Permissions-Policy: geolocation=(), microphone=()
 | 开发复杂度 | 较高 | 较低 |
 | 适用场景 | 后台管理系统、复杂应用 | 企业官网、博客 |
 
+### 什么是HTTP协议？其特点是什么？
+
+**HTTP（HyperText Transfer Protocol）** 是超文本传输协议，是互联网上应用最广泛的一种网络协议，用于从Web服务器传输超文本到本地浏览器。
+
+#### HTTP的主要特点
+
+| 特点 | 说明 |
+|------|------|
+| **简单快速** | 客户端向服务器请求服务时，只需传送请求方法和路径 |
+| **灵活** | 允许传输任意类型的数据对象，通过Content-Type标记 |
+| **无连接** | 限制每次连接只处理一个请求，响应后立即断开 |
+| **无状态** | 协议对事务处理没有记忆能力，每次请求都是独立的 |
+| **支持B/S和C/S模式** | 浏览器/服务器模式或客户端/服务器模式 |
+
+#### HTTP协议的发展历程
+
+```
+HTTP/0.9 (1991) → HTTP/1.0 (1996) → HTTP/1.1 (1997) → HTTP/2 (2015) → HTTP/3 (2022)
+```
+
+---
+
+### HTTP1.x vs HTTP2.0 vs HTTP3.0
+
+#### HTTP/1.0 vs HTTP/1.1
+
+| 特性 | HTTP/1.0 | HTTP/1.1 |
+|------|----------|----------|
+| 连接方式 | 短连接（每次请求新建TCP） | 长连接（Keep-Alive，复用TCP） |
+| 管道化 | 不支持 | 支持（但存在队头阻塞问题） |
+| 缓存控制 | 简单（Expires、Last-Modified） | 丰富（Cache-Control、ETag等） |
+| 断点续传 | 不支持 | 支持（Range头） |
+| Host头 | 可选 | 必需（支持虚拟主机） |
+
+#### HTTP/1.1 vs HTTP/2
+
+| 特性 | HTTP/1.1 | HTTP/2 |
+|------|----------|--------|
+| 传输格式 | 文本 | 二进制分帧 |
+| 多路复用 | 不支持（串行或管道化） | 支持（同一连接并行传输） |
+| 头部压缩 | 无 | HPACK算法压缩 |
+| 服务器推送 | 不支持 | 支持 |
+| 队头阻塞 | 存在 | 解决（流层面并行） |
+| 优先级 | 无 | 支持请求优先级 |
+
+**HTTP/2关键特性详解：**
+
+```
+┌─────────────────────────────────────────┐
+│           HTTP/2 连接结构               │
+├─────────────────────────────────────────┤
+│  Stream 1  │  Stream 3  │  Stream 5     │
+│  (请求JS)  │  (请求CSS) │  (请求图片)   │
+├────────────┴────────────┴───────────────┤
+│        二进制分帧层 (Binary Framing)     │
+├─────────────────────────────────────────┤
+│           单个TCP连接                    │
+└─────────────────────────────────────────┘
+```
+
+1. **二进制分帧**：将请求/响应分割为更小的帧，交错发送
+2. **多路复用**：同一连接上同时处理多个请求-响应
+3. **头部压缩**：HPACK算法减少重复头部传输
+4. **服务器推送**：服务器主动推送资源（如推送CSS/JS）
+
+#### HTTP/2 vs HTTP/3
+
+| 特性 | HTTP/2 | HTTP/3 |
+|------|--------|--------|
+| 传输协议 | TCP + TLS | QUIC（基于UDP） |
+| 连接建立 | TCP三次握手 + TLS握手 | 0-RTT或1-RTT |
+| 队头阻塞 | TCP层仍存在 | 彻底解决（UDP无连接） |
+| 连接迁移 | 不支持（IP变化需重连） | 支持（连接ID标识） |
+| 安全性 | TLS 1.2+ | 内置TLS 1.3 |
+
+**HTTP/3 (QUIC) 优势：**
+
+```
+传统HTTPS:                    HTTP/3 QUIC:
+┌─────────┐                   ┌─────────┐
+│  HTTP   │                   │  HTTP   │
+├─────────┤                   ├─────────┤
+│  TLS    │  分层握手          │         │  合并握手
+├─────────┤  2-3 RTT          │  QUIC   │  0-1 RTT
+│  TCP    │                   │ (基于UDP)│
+└─────────┘                   └─────────┘
+```
+
+---
+
+### HTTPS协议详解
+
+**HTTPS = HTTP + SSL/TLS**，在HTTP下加入SSL/TLS层，实现加密传输。
+
+#### HTTPS解决的问题
+
+1. **窃听风险**：第三方获取通信内容
+2. **篡改风险**：第三方修改通信内容
+3. **冒充风险**：第三方冒充他人身份
+
+#### TLS/SSL握手过程
+
+```
+客户端                          服务器
+  │                               │
+  ├────── Client Hello ─────────►│  支持的TLS版本、加密套件、随机数
+  │                               │
+  │◄───── Server Hello ──────────┤  确认TLS版本、加密套件、随机数
+  │◄───── Certificate ───────────┤  服务器证书（含公钥）
+  │◄───── Server Key Exchange ───┤  密钥交换参数（部分套件）
+  │◄───── Server Hello Done ─────┤
+  │                               │
+  ├───── Client Key Exchange ───►│  预主密钥（用公钥加密）
+  ├───── Change Cipher Spec ────►│
+  ├───── Finished ──────────────►│  握手完成，后续加密通信
+  │                               │
+  │◄──── Change Cipher Spec ─────┤
+  │◄──── Finished ───────────────┤
+  │                               │
+  ◄════════════════════════════════►  加密数据传输
+```
+
+**详细步骤：**
+
+1. **Client Hello**：客户端发送支持的TLS版本、加密套件列表、客户端随机数
+2. **Server Hello**：服务器确认TLS版本、选择加密套件、发送服务器随机数
+3. **Certificate**：服务器发送证书（包含公钥）
+4. **密钥交换**：客户端生成预主密钥，用服务器公钥加密后发送
+5. **生成会话密钥**：双方用客户端随机数 + 服务器随机数 + 预主密钥生成对称密钥
+6. **Finished**：双方发送Finished消息，确认握手完成
+
+#### HTTPS的优缺点
+
+| 优点 | 缺点 |
+|------|------|
+| 数据加密，防止窃听 | 握手耗时，增加延迟 |
+| 身份认证，防止冒充 | 证书需要费用 |
+| 数据完整性校验 | 加密消耗CPU资源 |
+| 提升SEO排名 | 缓存效率略低 |
+
+---
+
+### 常见的请求头和响应头
+
+#### 通用头部（General Headers）
+
+| 头部字段 | 说明 | 示例 |
+|----------|------|------|
+| `Cache-Control` | 缓存控制策略 | `max-age=3600, no-cache` |
+| `Connection` | 连接管理 | `keep-alive, close` |
+| `Date` | 消息创建时间 | `Mon, 23 May 2022 09:00:00 GMT` |
+| `Transfer-Encoding` | 传输编码 | `chunked` |
+
+#### 请求头部（Request Headers）
+
+| 头部字段 | 说明 | 示例 |
+|----------|------|------|
+| `Accept` | 可接受的MIME类型 | `text/html, application/json` |
+| `Accept-Encoding` | 可接受的编码格式 | `gzip, deflate, br` |
+| `Accept-Language` | 可接受的语言 | `zh-CN,zh;q=0.9,en;q=0.8` |
+| `Authorization` | 认证信息 | `Bearer token123` |
+| `Cookie` | 携带的Cookie | `sessionId=abc123; user=john` |
+| `Host` | 目标服务器地址 | `www.example.com` |
+| `Referer` | 来源页面地址 | `https://www.google.com` |
+| `User-Agent` | 客户端信息 | `Mozilla/5.0 (Windows NT 10.0...)` |
+| `Content-Type` | 请求体MIME类型 | `application/json` |
+| `Content-Length` | 请求体长度 | `1234` |
+| `If-None-Match` | 缓存验证（ETag） | `W/"33a64df5"` |
+| `If-Modified-Since` | 缓存验证（时间） | `Mon, 23 May 2022 09:00:00 GMT` |
+| `Range` | 请求部分内容 | `bytes=0-1023` |
+
+#### 响应头部（Response Headers）
+
+| 头部字段 | 说明 | 示例 |
+|----------|------|------|
+| `Access-Control-Allow-Origin` | CORS允许源 | `*` 或 `https://example.com` |
+| `Content-Encoding` | 响应体编码 | `gzip` |
+| `Content-Type` | 响应体MIME类型 | `text/html; charset=utf-8` |
+| `ETag` | 资源标识符 | `W/"33a64df5"` |
+| `Last-Modified` | 最后修改时间 | `Mon, 23 May 2022 09:00:00 GMT` |
+| `Location` | 重定向地址 | `https://new.example.com` |
+| `Server` | 服务器软件 | `nginx/1.21.0` |
+| `Set-Cookie` | 设置Cookie | `sessionId=abc123; Path=/; HttpOnly` |
+| `Strict-Transport-Security` | HSTS策略 | `max-age=31536000; includeSubDomains` |
+| `X-Content-Type-Options` | 防止MIME嗅探 | `nosniff` |
+| `X-Frame-Options` | 防止点击劫持 | `DENY, SAMEORIGIN` |
+| `X-XSS-Protection` | XSS过滤 | `1; mode=block` |
+
+---
+
+### Cookie、Session、Token、JWT详解
+
+#### Cookie
+
+**概念**：存储在客户端的小型文本文件，用于保存用户状态信息。
+
+```
+┌─────────────┐         ┌─────────────┐
+│   浏览器     │◄───────►│   服务器     │
+│  (Cookie)   │         │  (Set-Cookie)│
+└─────────────┘         └─────────────┘
+```
+
+**Cookie属性：**
+
+| 属性 | 说明 | 示例 |
+|------|------|------|
+| `Name=Value` | Cookie名称和值 | `sessionId=abc123` |
+| `Domain` | 所属域名 | `.example.com` |
+| `Path` | 有效路径 | `/api` |
+| `Expires/Max-Age` | 过期时间 | `Expires=Wed, 21 Oct 2025 07:28:00 GMT` |
+| `HttpOnly` | 禁止JS访问 | `HttpOnly` |
+| `Secure` | 仅HTTPS传输 | `Secure` |
+| `SameSite` | CSRF防护 | `Strict, Lax, None` |
+
+**Cookie的缺陷：**
+- 容量限制（4KB）
+- 每次请求都会携带，增加开销
+- 存在安全风险（XSS、CSRF）
+
+#### Session
+
+**概念**：存储在服务器端的用户状态信息，通过Session ID关联客户端。
+
+```
+┌─────────┐              ┌─────────┐              ┌─────────┐
+│  浏览器  │──────────────►│  服务器  │──────────────►│ Session │
+│ Cookie  │  Session ID   │  验证    │              │ 存储    │
+│(ID:123) │◄──────────────│         │◄─────────────│(ID:123) │
+└─────────┘              └─────────┘              └─────────┘
+```
+
+**Session vs Cookie：**
+
+| 特性 | Cookie | Session |
+|------|--------|---------|
+| 存储位置 | 客户端 | 服务器端 |
+| 安全性 | 较低 | 较高 |
+| 存储容量 | 4KB | 无限制（服务器内存） |
+| 性能 | 每次请求携带 | 需查询服务器 |
+| 跨域 | 受限制 | 需配合Cookie |
+
+#### Token
+
+**概念**：服务端生成的加密字符串，用于标识用户身份。
+
+**传统Token流程：**
+```
+1. 用户登录 → 2. 服务端生成Token → 3. 客户端存储Token
+→ 4. 后续请求携带Token → 5. 服务端验证Token
+```
+
+**Token优势：**
+- 服务端无状态，便于水平扩展
+- 支持跨域、跨服务
+- 天然支持移动端
+
+#### JWT（JSON Web Token）
+
+**概念**：基于JSON的开放标准（RFC 7519），用于在网络应用间传递声明。
+
+**JWT结构：**
+
+```
+xxxxx.yyyyy.zzzzz
+  │      │      │
+  │      │      └─ Signature（签名）
+  │      └──────── Payload（负载）
+  └─────────────── Header（头部）
+```
+
+**JWT示例：**
+```javascript
+// Header（Base64Url编码）
+{
+  "alg": "HS256",
+  "typ": "JWT"
+}
+
+// Payload（Base64Url编码）
+{
+  "sub": "1234567890",
+  "name": "John Doe",
+  "iat": 1516239022,
+  "exp": 1516242622
+}
+
+// Signature
+HMACSHA256(
+  base64Url(header) + "." +
+  base64Url(payload),
+  secret
+)
+```
+
+**JWT工作流程：**
+
+```
+┌─────────┐                                    ┌─────────┐
+│  客户端  │────── 1. 登录（用户名/密码） ──────►│  服务端  │
+│         │◄───────── 2. 返回JWT ─────────────│         │
+│  存储JWT │                                    │ 验证身份 │
+│         │────── 3. 请求API（携带JWT） ──────►│ 生成JWT │
+│         │◄──────── 4. 返回数据 ─────────────│ 验证JWT │
+└─────────┘                                    └─────────┘
+```
+
+**JWT vs Session：**
+
+| 特性 | JWT | Session |
+|------|-----|---------|
+| 存储位置 | 客户端 | 服务器端 |
+| 扩展性 | 好（无状态） | 差（需共享Session） |
+| 性能 | 验证快（无需查询） | 需查询存储 |
+| 注销处理 | 困难（需黑名单） | 简单（删除Session） |
+| 安全性 | 中等（可解码Header/Payload） | 较高 |
+
+**JWT最佳实践：**
+1. 设置合理的过期时间
+2. 敏感信息不要放入Payload
+3. 使用HTTPS传输
+4. 刷新Token机制（Refresh Token）
+
+---
+
+### OSI七层模型
+
+**OSI（Open System Interconnection）** 开放式系统互联模型，是国际标准化组织提出的网络通信概念框架。
+
+```
+┌─────────────────────────────────────────┐
+│  第7层 │  应用层（Application Layer）    │  HTTP、FTP、SMTP、DNS
+├────────┼────────────────────────────────┤
+│  第6层 │  表示层（Presentation Layer）   │  SSL/TLS、编码、加密
+├────────┼────────────────────────────────┤
+│  第5层 │  会话层（Session Layer）        │  会话管理、身份验证
+├────────┼────────────────────────────────┤
+│  第4层 │  传输层（Transport Layer）      │  TCP、UDP
+├────────┼────────────────────────────────┤
+│  第3层 │  网络层（Network Layer）        │  IP、ICMP、路由器
+├────────┼────────────────────────────────┤
+│  第2层 │  数据链路层（Data Link Layer）  │  MAC、交换机、以太网
+├────────┼────────────────────────────────┤
+│  第1层 │  物理层（Physical Layer）       │  网线、光纤、无线电波
+└────────┴────────────────────────────────┘
+```
+
+#### 各层详解
+
+| 层级 | 功能 | 协议/设备 | 数据单位 |
+|------|------|----------|----------|
+| **应用层** | 为用户应用提供网络服务 | HTTP、FTP、SMTP、DNS | 报文（Message） |
+| **表示层** | 数据格式转换、加密解密 | SSL/TLS、ASCII、JPEG | 报文（Message） |
+| **会话层** | 建立、管理、终止会话 | NetBIOS、RPC | 报文（Message） |
+| **传输层** | 端到端连接、可靠传输 | TCP、UDP | 段（Segment） |
+| **网络层** | 寻址、路由选择 | IP、ICMP、ARP、路由器 | 包（Packet） |
+| **数据链路层** | 帧同步、差错校验 | MAC、PPP、交换机 | 帧（Frame） |
+| **物理层** | 比特流传输 | 网线、光纤、集线器 | 比特（Bit） |
+
+#### TCP/IP四层模型 vs OSI七层模型
+
+```
+OSI七层模型                    TCP/IP四层模型
+┌─────────────┐
+│  应用层      │
+├─────────────┤                ┌─────────────┐
+│  表示层      │────────────────│  应用层      │  HTTP、FTP、DNS
+├─────────────┤                ├─────────────┤
+│  会话层      │                │  传输层      │  TCP、UDP
+├─────────────┤                ├─────────────┤
+│  传输层      │────────────────│  网络层      │  IP、ICMP
+├─────────────┤                ├─────────────┤
+│  网络层      │────────────────│  网络接口层  │  以太网、WiFi
+├─────────────┤                └─────────────┘
+│ 数据链路层   │
+├─────────────┤
+│  物理层      │
+└─────────────┘
+```
+
+---
+
+### TCP三次握手和四次挥手详解
+
+#### TCP三次握手（建立连接）
+
+**目的**：确认双方的接收和发送能力正常，同步序列号。
+
+```
+客户端                          服务器
+  │                               │
+  ├────────── SYN=1, seq=x ──────►│  ① 客户端请求建立连接
+  │           (SYN_SENT)          │     发送序列号x
+  │                               │
+  │◄── SYN=1, ACK=1, seq=y ──────┤  ② 服务器同意建立
+  │      ack=x+1 (SYN_RCVD)       │     发送序列号y
+  │                               │     确认号x+1
+  │                               │
+  ├────────── ACK=1, seq=x+1 ────►│  ③ 客户端确认
+  │      ack=y+1 (ESTABLISHED)    │     确认号y+1
+  │                               │     (ESTABLISHED)
+  │                               │
+  ◄════════════════════════════════►  连接建立，开始传输
+```
+
+**为什么是三次？**
+
+| 握手次数 | 客户端 | 服务端 | 结论 |
+|----------|--------|--------|------|
+| 1次 | 确认服务端收正常 | 无法确认 | ❌ 不行 |
+| 2次 | 确认服务端收发正常 | 无法确认客户端收 | ❌ 不行 |
+| 3次 | 确认服务端收发正常 | 确认客户端收发正常 | ✅ 可以 |
+
+**三次握手可以携带数据吗？**
+- 第一次、第二次：不可以（防止SYN Flood攻击）
+- 第三次：可以
+
+#### TCP四次挥手（断开连接）
+
+**目的**：双方都能确认对方已经没有数据要发送，安全关闭连接。
+
+```
+客户端                          服务器
+  │                               │
+  ├────────── FIN=1, seq=u ──────►│  ① 客户端请求关闭
+  │          (FIN_WAIT_1)         │     发送FIN
+  │                               │
+  │◄────────── ACK=1, seq=v ─────┤  ② 服务端确认
+  │      ack=u+1 (CLOSE_WAIT)     │     发送ACK
+  │          (FIN_WAIT_2)         │
+  │                               │
+  │   （服务端继续发送未发完的数据）  │
+  │                               │
+  │◄──────── FIN=1, ACK=1, seq=w─┤  ③ 服务端请求关闭
+  │      ack=u+1 (LAST_ACK)       │     发送FIN
+  │                               │
+  ├────────── ACK=1, seq=u+1 ────►│  ④ 客户端确认
+  │      ack=w+1 (TIME_WAIT)      │     发送ACK
+  │                               │     (CLOSED)
+  │   （等待2MSL后关闭）            │
+  │                               │
+  │          (CLOSED)             │
+```
+
+**为什么是四次？**
+
+因为TCP是全双工通信，双方都需要单独关闭自己的发送通道：
+1. 客户端发送FIN → 服务端确认（关闭客户端→服务端方向）
+2. 服务端发送FIN → 客户端确认（关闭服务端→客户端方向）
+
+**TIME_WAIT状态（2MSL）的作用：**
+
+1. **确保ACK到达服务端**：如果ACK丢失，服务端会重发FIN
+2. **防止旧连接的数据包干扰新连接**：等待网络中残留的数据包消失
+
+**MSL（Maximum Segment Lifetime）**：报文最大生存时间，通常是2分钟。
+
+---
+
+### 浏览器渲染原理详解
+
+#### 关键渲染路径（Critical Rendering Path）
+
+```
+HTML ──► DOM Tree ──┐
+                    ├──► Render Tree ──► Layout ──► Paint ──► Composite
+CSS ───► CSSOM Tree─┘
+```
+
+#### 详细渲染流程
+
+**1. 构建DOM树（DOM Construction）**
+
+```javascript
+// HTML解析过程
+bytes(字节) → characters(字符) → tokens(标记) → nodes(节点) → DOM
+```
+
+- 浏览器收到HTML响应，进行词法分析
+- 将HTML转换为Token
+- 根据Token构建DOM节点
+- 组装成DOM树
+
+**特点：**
+- 遇到`<script>`会阻塞解析（除非使用`async`或`defer`）
+- 遇到`<link rel="stylesheet">`会阻塞渲染
+
+**2. 构建CSSOM树（CSSOM Construction）**
+
+```javascript
+// CSS解析过程
+CSS Bytes → Characters → Tokens → Nodes → CSSOM
+```
+
+- 解析CSS文件和内联样式
+- 构建CSSOM树
+
+**特点：**
+- CSS解析不会阻塞DOM构建
+- 但会阻塞渲染（Render Tree构建需要CSSOM）
+
+**3. 构建渲染树（Render Tree）**
+
+```
+DOM Tree + CSSOM Tree = Render Tree
+
+┌────────────────────────────────────────┐
+│  Render Tree（只包含可见元素）           │
+├────────────────────────────────────────┤
+│  • html                                │
+│  • body                                │
+│  • div.container（display: block）      │
+│  • h1（visible）                        │
+│  • p（visible）                         │
+│  • （script、meta、head等不可见元素被忽略）│
+│  • （display: none的元素被忽略）         │
+└────────────────────────────────────────┘
+```
+
+**4. 布局（Layout/Reflow）**
+
+- 计算每个节点在视口中的精确位置和大小
+- 也称为Reflow（回流）
+
+```javascript
+// 触发Layout的属性
+width、height、padding、margin、border
+position、top、left、right、bottom
+display、float、overflow
+font-size、line-height
+...
+```
+
+**5. 绘制（Paint）**
+
+- 将渲染树的每个节点转换为屏幕上的实际像素
+- 绘制文本、颜色、图像、边框、阴影等
+
+```javascript
+// 触发Paint的属性
+color、background-color
+border-style、border-radius
+box-shadow、text-shadow
+outline
+...
+```
+
+**6. 合成（Composite）**
+
+- 将多个图层合成为最终页面
+- 使用GPU加速，提升性能
+
+```
+图层（Layer）概念：
+┌─────────────────────────────────────┐
+│  Layer 1: 背景                      │
+├─────────────────────────────────────┤
+│  Layer 2: 内容（div、文字等）         │
+├─────────────────────────────────────┤
+│  Layer 3: 固定头部（position: fixed） │
+├─────────────────────────────────────┤
+│  Layer 4: 弹窗（z-index高）           │
+└─────────────────────────────────────┘
+          ↓
+    GPU合成最终画面
+```
+
+**会创建独立图层的属性：**
+- `transform: translate3d()`、`transform: scale3d()`
+- `opacity`
+- `will-change: transform, opacity`
+- `filter`
+- `<video>`、`<canvas>`、`<iframe>`
+
+#### 渲染优化策略
+
+**1. 避免回流（Reflow）**
+
+```javascript
+// ❌ 不好的做法（多次回流）
+const el = document.getElementById('app');
+el.style.width = '100px';
+el.style.height = '100px';
+el.style.margin = '10px';
+
+// ✅ 好的做法（批量修改）
+const el = document.getElementById('app');
+el.style.cssText = 'width: 100px; height: 100px; margin: 10px;';
+
+// ✅ 或使用class
+el.classList.add('new-style');
+```
+
+**2. 使用transform和opacity**
+
+```css
+/* ✅ 触发GPU加速，不会引起回流和重绘 */
+.box {
+  transform: translateX(100px);
+  opacity: 0.5;
+  will-change: transform;
+}
+```
+
+**3. 避免强制同步布局（Forced Synchronous Layout）**
+
+```javascript
+// ❌ 强制同步布局（读取后立即写入）
+function bad() {
+  const height = box.offsetHeight;  // 读取（触发Layout）
+  box.style.height = (height + 10) + 'px';  // 写入（再次触发Layout）
+}
+
+// ✅ 分离读写
+function good() {
+  const height = box.offsetHeight;  // 读取
+  // ... 其他代码
+  requestAnimationFrame(() => {
+    box.style.height = (height + 10) + 'px';  // 写入
+  });
+}
+```
+
+**4. 防抖和节流滚动事件**
+
+```javascript
+// 使用 requestAnimationFrame 优化滚动
+let ticking = false;
+window.addEventListener('scroll', () => {
+  if (!ticking) {
+    requestAnimationFrame(() => {
+      updatePosition();
+      ticking = false;
+    });
+    ticking = true;
+  }
+});
+```
+
+#### 关键性能指标
+
+| 指标 | 名称 | 目标值 | 说明 |
+|------|------|--------|------|
+| FP | First Paint | < 1s | 首次绘制 |
+| FCP | First Contentful Paint | < 1.8s | 首次内容绘制 |
+| LCP | Largest Contentful Paint | < 2.5s | 最大内容绘制 |
+| FID | First Input Delay | < 100ms | 首次输入延迟 |
+| TTI | Time to Interactive | < 3.8s | 可交互时间 |
+| CLS | Cumulative Layout Shift | < 0.1 | 累积布局偏移 |
+
 ---
 
 ## 小程序开发
@@ -2188,6 +2922,128 @@ document.head.appendChild(script);
 ---
 
 ## 其他工程化实践
+
+### 对前端工程化的理解
+
+**什么是前端工程化？**
+
+前端工程化是指将软件工程的思想和方法应用到前端开发中，通过工具和流程标准化、规范化前端项目的开发、构建、测试和部署过程。
+
+**主要解决的问题：**
+
+1. **代码规范化**
+   - 统一的代码风格（ESLint、Prettier）
+   - Git提交规范（Commitlint、Conventional Commits）
+   - 代码质量保障（TypeScript、单元测试）
+
+2. **开发效率提升**
+   - 脚手架工具快速创建项目
+   - 热更新加速开发
+   - 自动化构建减少重复劳动
+
+3. **资源优化**
+   - 代码压缩和混淆
+   - 静态资源优化（图片压缩、懒加载）
+   - Tree Shaking删除无用代码
+   - 代码分割实现按需加载
+
+4. **协作与维护**
+   - 模块化开发
+   - 组件化设计
+   - 文档自动生成
+   - 版本管理规范
+
+5. **质量保证**
+   - 自动化测试
+   - 代码审查流程
+   - 持续集成/持续部署（CI/CD）
+   - 性能监控
+
+**核心组成部分：**
+
+```
+前端工程化
+├── 开发阶段
+│   ├── 脚手架
+│   ├── 组件库
+│   ├── Mock数据
+│   └── 开发规范
+├── 构建阶段
+│   ├── 代码编译（Babel）
+│   ├── 打包工具（Webpack/Vite）
+│   ├── 代码优化
+│   └── 资源处理
+├── 测试阶段
+│   ├── 单元测试
+│   ├── E2E测试
+│   └── 性能测试
+└── 部署阶段
+    ├── CI/CD流水线
+    ├── 环境管理
+    └── 监控告警
+```
+
+### 对SSG的理解
+
+**什么是SSG（Static Site Generation）？**
+
+SSG（静态站点生成）是指在构建时将页面预先渲染为静态HTML文件，部署时直接返回这些静态文件，无需服务器实时渲染。
+
+**SSG vs SSR vs CSR：**
+
+| 特性 | SSG | SSR | CSR |
+|------|-----|-----|-----|
+| 首屏加载 | 极快 | 较快 | 较慢 |
+| SEO | 友好 | 友好 | 不友好 |
+| 服务器压力 | 极低 | 较高 | 低 |
+| 动态内容 | 需额外处理 | 支持 | 支持 |
+| 构建时间 | 较长 | 短 | 短 |
+
+**SSG工作流程：**
+
+```
+开发阶段 → 构建阶段 → 部署阶段 → 用户访问
+    ↓           ↓           ↓           ↓
+  编写代码   预渲染HTML   静态托管    直接返回
+            生成静态文件  CDN分发     HTML
+```
+
+**适用场景：**
+
+1. **内容型网站**
+   - 博客
+   - 文档站点
+   - 企业官网
+
+2. **营销页面**
+   - 活动落地页
+   - 产品介绍页
+
+3. **更新频率低的应用**
+   - 文档
+   - 帮助中心
+
+**常用工具：**
+
+- **Next.js**：React生态的SSG方案
+- **Nuxt.js**：Vue生态的SSG方案
+- **Gatsby**：React静态站点生成器
+- **Hugo**：Go编写的极速SSG工具
+- **Hexo**：博客框架
+
+**SSG优化策略：**
+
+1. **增量静态再生（ISR）**
+   - 无需重新构建整个站点
+   - 按需更新特定页面
+
+2. **混合渲染**
+   - 静态页面 + 客户端动态数据
+   - 部分页面使用SSR
+
+3. **CDN加速**
+   - 全球分发静态资源
+   - 边缘缓存
 
 ### Monorepo管理
 

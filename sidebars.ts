@@ -49,6 +49,22 @@ const sidebars: SidebarsConfig = {
       ],
     },
   ],
+  backendSidebar: [
+    {
+      type: 'category',
+      label: '后端开发规范',
+      items: [
+        'backend-guidelines',
+      ],
+    },
+    {
+      type: 'category',
+      label: '后端知识体系',
+      items: [
+        'backend-knowledge',
+      ],
+    },
+  ],
   interviewSidebar: [
     {
       type: 'category',
@@ -94,6 +110,13 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: 'Node.js',
+      items: [
+        'interview/node',
+      ],
+    },
+    {
+      type: 'category',
       label: '前端工程化',
       items: [
         'interview/engineering',
@@ -111,6 +134,13 @@ const sidebars: SidebarsConfig = {
       label: '设计模式',
       items: [
         'interview/design-patterns',
+      ],
+    },
+    {
+      type: 'category',
+      label: '框架对比',
+      items: [
+        'interview/vue-vs-react',
       ],
     },
   ],
