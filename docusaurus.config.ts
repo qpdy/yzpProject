@@ -5,7 +5,7 @@ import type * as Preset from '@docusaurus/preset-classic';
 // This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
 
 const config: Config = {
-  title: '杨展鹏的个人网站',
+  title: 'Vue和React前端面试题，开发指南',
   tagline: 'Vue和React开发指南',
   favicon: 'img/favicon.ico',
 

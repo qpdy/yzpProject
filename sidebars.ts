@@ -64,6 +64,13 @@ const sidebars: SidebarsConfig = {
         'backend-knowledge',
       ],
     },
+    {
+      type: 'category',
+      label: 'Go 面试题',
+      items: [
+        'interview/go',
+      ],
+    },
   ],
   interviewSidebar: [
     {
