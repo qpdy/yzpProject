@@ -6,11 +6,11 @@ title: React（面试要点）
 # React 面试要点
 
 ## 目录
-- [React生命周期有哪些？](#1-react生命周期有哪些)
-- [React Hooks有哪些？](#2-react-hooks有哪些)
-- [类组件和函数组件有什么区别？](#3-类组件和函数组件有什么区别)
-- [虚拟DOM是什么？有什么优势？](#4-虚拟dom是什么有什么优势)
-- [Fiber架构是什么？解决了什么问题？](#5-fiber架构是什么解决了什么问题)
+- [Fiber架构是什么？解决了什么问题？](#1-fiber架构是什么解决了什么问题)
+- [React生命周期有哪些？](#2-react生命周期有哪些)
+- [React Hooks有哪些？](#3-react-hooks有哪些)
+- [类组件和函数组件有什么区别？](#4-类组件和函数组件有什么区别)
+- [虚拟DOM是什么？有什么优势？](#5-虚拟dom是什么有什么优势)
 - [useState和useReducer有什么区别？](#6-usestate和usereducer有什么区别)
 - [useEffect和useLayoutEffect有什么区别？](#7-useeffect和uselayouteffect有什么区别)
 - [useMemo和useCallback有什么区别？](#8-usememo和usecallback有什么区别)
@@ -43,10 +43,408 @@ title: React（面试要点）
 - [不使用脚手架手动搭建 React 应用](#35-不使用脚手架手动搭建-react-应用)
 - [React 路由变化监听](#36-react-路由变化监听)
 - [react-router 和原生路由有什么区别？](#37-react-router-和原生路由有什么区别)
+- [Next.js 与 React SSR](#38-nextjs-与-react-ssr)
 
 ---
 
-## 1. React生命周期有哪些？
+## React 渲染流程（Fiber 工作循环）
+
+React 的一次完整渲染可拆分为 5 个阶段，类组件/函数组件的生命周期钩子就分布在这些阶段中。
+
+**1. 触发渲染**
+
+以下任一情况都会触发一次渲染：
+
+- 首次挂载（`createRoot` / `ReactDOM.render`）
+- `setState`
+- `useState` 的 setter
+- 父组件重渲染（导致子组件重渲染）
+- `Context` 值变化
+- `useReducer` 的 `dispatch`
+- `useSyncExternalStore` 检测到外部 store 变化
+- `Suspense` 的 Promise resolve（子组件从 fallback 切换到内容）
+
+**2. 调度阶段（Scheduler）**
+
+为任务分配优先级（lane 模型），按优先级排序后出队。高优先级任务可以插队，低优先级任务会被推迟。
+
+**3. render 阶段（可中断）**
+
+此阶段在内存中进行，可被高优先级任务打断，是 React 时间切片（Time Slicing）的基础。
+
+- 调用组件函数（执行 `render`），得到新的虚拟 DOM
+- 执行 reconciliation（Diff 算法）：reconciliation 是 render 阶段的核心算法，负责对比新旧虚拟 DOM，计算出需要做的 DOM 操作
+  - 对比新旧虚拟 DOM
+  - 生成新的 Fiber 树，在 Fiber 节点上标记 effectTag（Placement / Update / Deletion）
+  - 将带 effectTag 的节点链接成 effect list（副作用链表）
+- 此阶段可被高优先级任务打断，打断后从断点继续，无需从头开始
+
+**4. commit 阶段（同步，不可中断）**
+
+为什么不可中断？——DOM 写操作是真实世界的副作用，一旦中断会导致界面状态不一致（部分节点已更新、部分未更新）。
+
+- commit 阶段的入口函数是 `commitRoot`，它拿到的是 render 阶段产出的 effect list（带副作用的 Fiber 节点链表），只遍历有标记的节点，不必遍历整棵树
+- commit 阶段会一次性、不可中断地把所有变更应用到真实 DOM 上
+- 内部又分为三个子阶段（Before Mutation → Mutation → Layout），但整体是同步的：
+  - **Before Mutation**：读取 DOM 状态（如 `getSnapshotBeforeUpdate`）
+  - **Mutation**：执行 DOM 操作（增 / 删 / 改）
+  - **Layout**：`useLayoutEffect` 同步执行（对应类组件的 `componentDidMount` / `componentDidUpdate`）
+- Layout 阶段结束后，React 会立刻通过 `MessageChannel` 调度 `useEffect` 的执行（不阻塞浏览器绘制）
+
+**5. 被动副作用执行（Passive Effects）**
+
+- Layout 阶段结束后，浏览器完成 Paint，React 才开始执行 `useEffect`（异步）
+- 在下一次渲染的 `useEffect` 执行之前，会先同步执行上一次的清理函数（清除订阅、定时器等），然后再执行本次 `useEffect` 回调
+
+> 副作用主要指 `useEffect`、类组件的 `componentDidMount` / `componentDidUpdate` 等。
+>
+> - `useEffect` 在 commit 阶段完成后异步延迟执行，不阻塞浏览器绘制
+> - `useLayoutEffect` 在 commit 阶段的 Layout 子阶段同步执行，会阻塞绘制
+
+---
+
+
+## 1. Fiber架构是什么？解决了什么问题？
+
+### 一句话回答
+
+Fiber 是 React 16 引入的**新的协调算法（Reconciler）**，本质是把同步、不可中断的渲染改成**异步可中断**的渲染，从架构层面解决了 React 15 大组件渲染阻塞主线程导致卡顿和掉帧的问题。
+
+### 一、Fiber 架构背景
+
+React 16 之前（Stack 架构）存在的核心问题：
+
+- **同步递归更新**：整个虚拟 DOM 树一次性递归完成，无法中断
+- **无法中断**：大组件渲染会长时间阻塞主线程
+- **动画卡顿**：长任务导致页面掉帧
+- **交互无响应**：用户输入、点击、滚动等事件无法及时处理
+
+React 15 的 Stack 模式不可中断意味着：一旦开始渲染，必须等整棵组件树遍历完成，主线程才能去做别的事。
+
+### 二、什么是 Fiber
+
+> Fiber 既是**数据结构**（链表形式的虚拟 DOM 节点），也是**工作单元**（可以暂停、恢复、丢弃）。
+
+把渲染过程拆成一个个小的"工作单元"（一个 Fiber 节点），每完成一个单元就检查一下：
+- 还有时间吗？
+- 有更紧急的任务吗？
+
+不够就**让出主线程**，回头接着干。
+
+### 三、Fiber 节点数据结构
+
+每个 React 元素都对应一个 Fiber 节点，节点之间用链表相连：
+
+```javascript
+function FiberNode(tag, pendingProps, key, mode) {
+  // ---- 身份信息 ----
+  this.tag = tag;                    // 类型：FunctionComponent / HostComponent(DOM) / HostText 等
+  this.key = key;
+  this.elementType = null;           // createElement 的第一个参数
+  this.type = null;                  // function / class / 字符串
+  this.stateNode = null;             // 真实 DOM 节点或 class 实例
+
+  // ---- 树状结构（链表） ----
+  this.return = null;                // 父 Fiber
+  this.child = null;                 // 第一个子 Fiber
+  this.sibling = null;               // 下一个兄弟 Fiber
+  this.index = 0;
+
+  // ---- 状态 ----
+  this.pendingProps = pendingProps;
+  this.memoizedProps = null;         // 上一次渲染的 props
+  this.memoizedState = null;         // 上次渲染的 state（函数组件这里是 hooks 链）
+  this.updateQueue = null;           // setState 的更新队列
+  this.dependencies = null;
+
+  // ---- 副作用 ----
+  this.flags = 0;                    // 副作用标记：Placement / Update / Deletion
+  this.nextEffect = null;            // effect 链表
+  this.firstEffect = null;
+  this.lastEffect = null;
+
+  // ---- 双缓存 ----
+  this.alternate = null;             // 指向另一棵树中对应的 Fiber
+}
+```
+
+**链表三指针**：`return`（父）、`child`（长子）、`sibling`（下一个兄弟）。
+
+为什么不用树形结构？因为链表遍历可以**随时中断**（保留当前节点指针即可），而树形递归需要完整的调用栈。
+
+### 四、Fiber 与 React 元素的区别
+
+| | React 元素 | Fiber 节点 |
+|---|---|---|
+| 创建时机 | 每次 render 都重新创建 | 首次渲染创建，后续复用 |
+| 持久性 | 不可变、临时对象 | 持久化的工作单元 |
+| 内容 | type / props / key | 元素信息 + 实例 + state + 副作用 + 调度信息 |
+
+简单说：**React 元素是描述**，**Fiber 节点是状态机**。
+
+### 五、完整的渲染流程（Render + Commit 双阶段）
+
+```
+触发更新（setState / 父组件重渲染）
+       ↓
+┌───────────────────────┐
+│   调度阶段 Scheduler   │  → 分配优先级（Lane），排入队列
+└───────────────────────┘
+       ↓
+┌───────────────────────┐
+│   Render 阶段（可中断）│  → 构建 workInProgress Fiber 树
+│                       │  → 执行 diff，打 effect 标记
+│                       │  → 每 5ms 检查一次 shouldYield
+└───────────────────────┘
+       ↓
+┌───────────────────────┐
+│   Commit 阶段（不可中断）│ → 遍历 effect list 一次性提交
+│                       │  → Before Mutation → Mutation → Layout
+│                       │  → 切换 current 指针（双缓冲）
+└───────────────────────┘
+       ↓
+┌───────────────────────┐
+│  浏览器 Paint          │
+└───────────────────────┘
+       ↓
+┌───────────────────────┐
+│  Passive Effects       │  → useEffect 异步执行
+└───────────────────────┘
+```
+
+**为什么 Commit 阶段不可中断？**
+
+DOM 写操作是真实世界的副作用，一旦中断会导致界面出现半新半旧的不一致状态。React 18 的 useTransition 可以影响 Render 阶段的中断，但不会让 Commit 半途而废。
+
+### 六、双缓冲（Double Buffering）
+
+```
+       current 树                    workInProgress 树
+      （屏幕上显示）                   （构建中的新树）
+          root                              root
+         /    \                            /    \
+    fiberA   fiberB                  fiberA'   fiberB'
+        \       \                        |        \
+      fiberC   fiberD                  fiberC'   fiberD'
+
+    渲染完成后：
+    root.current = workInProgress  （切换指针，O(1)）
+```
+
+**好处**：
+- 用户始终看到完整状态，看不到渲染中间过程
+- 中断后可丢弃 wip 重新构建，无需回滚
+- 切换成本极低（指针替换）
+
+### 七、时间切片（Time Slicing）
+
+```javascript
+// 简化版 workLoop
+function workLoopConcurrent() {
+  while (workInProgress !== null && !shouldYield()) {
+    workInProgress = performUnitOfWork(workInProgress);
+  }
+}
+
+// shouldYield：判断是否需要让出主线程
+function shouldYield() {
+  // 默认 5ms 时间片
+  return performance.now() >= deadline;
+}
+
+// 调度通道（React 17+）
+const channel = new MessageChannel();
+channel.port1.onmessage = performWorkUntilDeadline;
+scheduleWork = () => channel.port2.postMessage(null);
+```
+
+**为什么用 MessageChannel 而不是 setTimeout / requestIdleCallback？**
+
+| 方案 | 问题 |
+|------|------|
+| `setTimeout(fn, 0)` | 最低 4ms 延迟；嵌套 5 层后最小间隔 ≥ 4ms，且属于宏任务末尾 |
+| `requestIdleCallback` | 兼容性差、调度时机不可控，浏览器空闲才触发 |
+| `requestAnimationFrame` | 一帧只触发一次，不可控 |
+| `MessageChannel` ✅ | 异步宏任务，时机可控，几乎所有浏览器支持 |
+
+### 八、优先级调度
+
+React Scheduler 中的五个优先级：
+
+| 优先级 | 数值 | 超时时间 | 场景 |
+|--------|------|----------|------|
+| ImmediatePriority | 1 | -1ms | 同步任务、离散用户输入（click、keydown） |
+| UserBlockingPriority | 2 | 250ms | drag、scroll、hover |
+| NormalPriority | 3 | 5000ms | setState 默认、Promise 回调 |
+| LowPriority | 4 | 10000ms | 数据请求结果、可延迟通知 |
+| IdlePriority | 5 | ∞ | 分析上报、预渲染 |
+
+**Lane 模型**（React 17+）：每个更新分配一个或多个 bit 位（车道），同优先级更新合并，不同优先级可以插队。
+
+```jsx
+// React 18 使用 Transition 标记低优先级更新
+import { useTransition } from 'react';
+
+function App() {
+  const [isPending, startTransition] = useTransition();
+
+  const handleClick = () => {
+    // 高优先级：用户输入
+    setInputValue(input);
+
+    // 低优先级：可中断、可延迟
+    startTransition(() => {
+      setSearchResults(bigArray.filter(...));
+    });
+  };
+}
+```
+
+### 九、Diff 算法在 Fiber 上的实现
+
+**Diff 三原则**：
+1. 同层比较，不跨层级（DOM 节点跨层级移动代价大，直接重建）
+2. 不同 `type` 的组件视为不同树，整棵替换
+3. `key` 帮助复用节点（列表渲染必须给稳定 key）
+
+Diff 完成后在对应 Fiber 上打 `flags`：
+- `Placement`：插入或移动
+- `Update`：属性变化
+- `Deletion`：删除节点
+- `ChildDeletion`：子节点被删除
+- `Ref` / `Callback` 等
+
+最后通过 `firstEffect → nextEffect` 链表串起来，Commit 阶段只遍历这个链表，不必扫整棵树。
+
+### 十、Fiber 架构优势
+
+1. **可中断渲染**：大组件不再阻塞主线程
+2. **多优先级调度**：用户交互永远优先于数据更新
+3. **更好的动画流畅度**：60fps（每帧 16.6ms）
+4. **Suspense**：声明式异步加载
+5. **并发特性（React 18）**：自动批处理、Transitions、Suspense 改进
+
+### 十一、Fiber 与 Stack 架构对比
+
+| 特性 | Stack（React 15） | Fiber（React 16+） |
+|------|------------------|-------------------|
+| 更新方式 | 同步递归 | 异步可中断 |
+| 任务调度 | 无 | 优先级队列 |
+| 时间切片 | 不支持 | 支持（5ms） |
+| 中断恢复 | 不支持 | 支持 |
+| 优先级 | 无 | 多级 |
+| 双缓冲 | 无 | current / workInProgress |
+| 并发渲染 | 不支持 | 支持（React 18+） |
+| 数据结构 | 树 | 链表 |
+
+### 十二、Scheduler 实现简析
+
+```javascript
+// 伪代码
+function scheduleCallback(priorityLevel, callback) {
+  const startTime = performance.now();
+  const expirationTime = startTime + timeoutForPriority[priorityLevel];
+
+  const newTask = {
+    id: taskIdCounter++,
+    callback,
+    priorityLevel,
+    startTime,
+    expirationTime,
+  };
+
+  // 推入按 expirationTime 排序的小顶堆
+  push(taskQueue, newTask);
+
+  // 请求宿主调度
+  requestHostCallback(flushWork);
+}
+```
+
+内部用**小顶堆**（按 expirationTime 排序）实现优先级队列，过期任务会强制同步执行。
+
+### 十三、高频面试题
+
+#### Q1：Fiber 是什么？解决了什么问题？
+
+**答**：Fiber 是 React 16 引入的协调算法，本质是把同步不可中断的递归渲染改成可中断的异步渲染。解决的核心问题是：大组件渲染阻塞主线程导致掉帧和交互卡顿。
+
+#### Q2：Fiber 节点和 React 元素有什么区别？
+
+**答**：React 元素是 `createElement` 创建的轻量描述对象，每次渲染都重新生成；Fiber 节点是组件实例的持久化结构，保存 props / state / 副作用 / 调度信息，可在多次渲染间复用。
+
+#### Q3：为什么 Fiber 用链表而不是树？
+
+**答**：链表可以通过 `child / sibling / return` 三指针灵活遍历，便于随时中断和恢复当前工作单元，无需维护完整的递归调用栈。
+
+#### Q4：Render 阶段和 Commit 阶段的区别？
+
+| 阶段 | 是否可中断 | 工作内容 |
+|------|-----------|---------|
+| Render | ✅ 可中断 | 构建 Fiber 树、diff、打 effect 标记 |
+| Commit | ❌ 不可中断 | 操作真实 DOM、执行同步生命周期、切换 current |
+
+**Commit 不可中断的原因**：DOM 操作必须保证一致性，否则用户会看到半新半旧的残缺状态。
+
+#### Q5：setState 是同步还是异步？
+
+**答**：React 18 中所有 `setState` 都是异步批处理（统一在下一个微任务或宏任务集中提交），包括定时器、Promise、原生事件回调里都自动批处理。React 17 及之前在 React 管理的回调（合成事件、生命周期）里是异步批处理，在 `setTimeout` / 原生事件监听里是同步。
+
+#### Q6：Fiber 是怎么实现可中断的？
+
+**答**：三点关键：
+1. **链表结构**：遍历可以暂停在任意节点
+2. **时间切片**：每个工作单元完成后 `shouldYield()` 判断是否需要让出主线程
+3. **优先级调度**：高优先级任务可以打断低优先级任务，被打断的任务从断点继续
+
+#### Q7：为什么 Vue 不需要 Fiber？
+
+**答**：
+- Vue 的**细粒度响应式**（基于 Proxy）能精确追踪依赖，只有使用到某数据的组件会重渲染
+- Vue 模板**编译期**做静态分析，标记静态节点和动态绑定，更新范围天然就小
+- 因此 Vue 不需要遍历整棵组件树，也不必可中断渲染
+
+#### Q8：什么是双缓冲？有什么好处？
+
+**答**：同时维护两棵 Fiber 树，`current` 树对应屏幕，`workInProgress` 树在内存中构建。提交时只需交换 `root.current` 指针，用户始终看到完整状态，零白屏切换。
+
+#### Q9：Concurrent Mode 解决了什么问题？
+
+**答**：让 React 可以同时准备多个版本的 UI，根据用户交互选择最合适的版本呈现。解决：长任务阻塞输入响应、加载状态闪烁、过渡 UI 卡顿三大问题。
+
+#### Q10：useEffect 和 useLayoutEffect 在 Fiber 流程中的差别？
+
+| | useEffect | useLayoutEffect |
+|---|---|---|
+| 执行时机 | Commit 之后（异步、浏览器绘制后） | Commit 阶段中 Layout 子阶段（DOM 更新后、绘制前） |
+| 是否阻塞渲染 | 否 | 是 |
+| 用途 | 数据请求、订阅、副作用 | DOM 测量、布局调整 |
+
+### 十四、面试 90 秒回答模板
+
+> **"Fiber 是 React 16 引入的协调算法，本质是把同步递归渲染改成异步可中断的渲染。**
+>
+> **它解决的核心问题是：大组件渲染时同步阻塞主线程，导致掉帧和交互卡顿。**
+>
+> **实现上有三个关键点：**
+>
+> 1. **数据结构**——把虚拟 DOM 改成链表 Fiber 节点，用 `child、sibling、return` 三指针连接，能随时中断和恢复。
+>
+> 2. **时间切片**——引入 Scheduler 调度器，每 5ms 检查一次是否需要让出主线程，用 MessageChannel 继续调度，避免阻塞渲染。
+>
+> 3. **优先级**——区分 Immediate、UserBlocking、Normal、Low、Idle 五级，用户输入等高优先级任务可以打断低优先级渲染。
+>
+> **整个流程分两阶段：Render 阶段做 diff、打 effect 标记（可中断）；Commit 阶段一次性操作 DOM（不可中断）。通过 current 与 workInProgress 双缓冲切换指针，零成本切换 UI。**
+>
+> **这也是 React 18 并发特性的基础。**"
+
+---
+
+
+---
+
+
+## 2. React生命周期有哪些？
 
 React生命周期主要分为类组件生命周期和函数组件生命周期（通过Hooks实现）。
 
@@ -233,7 +631,7 @@ function Example() {
 
 ---
 
-## 2. React Hooks有哪些？
+## 3. React Hooks有哪些？
 
 React Hooks是React 16.8引入的新特性，让函数组件拥有状态和生命周期。
 
@@ -473,7 +871,7 @@ function useFriendStatus(friendID) {
 
 ---
 
-## 3. 类组件和函数组件有什么区别？
+## 4. 类组件和函数组件有什么区别？
 
 ### 对比表
 
@@ -605,7 +1003,7 @@ function Counter() {
 
 ---
 
-## 4. 虚拟DOM是什么？有什么优势？
+## 5. 虚拟DOM是什么？有什么优势？
 
 ### 什么是虚拟DOM
 
@@ -696,177 +1094,6 @@ ReactDOM.render(<div>{elements}</div>, document.body);
 | 虚拟DOM | 声明式，批量更新 | 首次渲染慢，内存占用 |
 | Svelte | 编译时优化，无运行时 | 生态较小 |
 
----
-
-## 5. Fiber架构是什么？解决了什么问题？
-
-### Fiber架构背景
-
-React 16之前版本存在的问题：
-- **同步递归更新**：整个虚拟DOM树一次性更新完成
-- **无法中断**：大组件渲染会阻塞主线程
-- **动画卡顿**：长任务导致掉帧
-- **交互无响应**：用户输入无法及时处理
-
-### 什么是Fiber
-
-Fiber是React 16引入的新协调算法，将同步更新改为异步可中断更新。
-
-### 核心概念
-
-1. **Fiber节点**
-   ```javascript
-   {
-     type: 'div',           // 元素类型
-     key: null,             // key
-     props: {},             // 属性
-     stateNode: null,       // DOM节点或组件实例
-
-     // Fiber树结构
-     return: Fiber | null,  // 父节点
-     child: Fiber | null,   // 第一个子节点
-     sibling: Fiber | null, // 下一个兄弟节点
-
-     // 状态
-     memoizedState: any,    // Hooks链表
-     updateQueue: null,     // 更新队列
-
-     // 效果
-     effectTag: 0,          // 副作用标记
-     nextEffect: null,      // 下一个副作用
-   }
-   ```
-
-2. **双缓存机制**
-   - current树：当前屏幕显示的树
-   - workInProgress树：正在构建的新树
-   - 完成后直接切换指针
-
-3. **优先级调度**
-   ```javascript
-   // 优先级等级
-   const ImmediatePriority = 1;  // 立即执行
-   const UserBlockingPriority = 2; // 用户交互
-   const NormalPriority = 3;     // 普通更新
-   const LowPriority = 4;        // 低优先级
-   const IdlePriority = 5;       // 空闲时执行
-   ```
-
-4. **时间切片**
-   ```javascript
-   // 每个时间片5ms
-   const WORK_LOOP_TIMEOUT = 5000; // 5ms
-
-   function workLoop(deadline) {
-     let shouldYield = false;
-     while (nextUnitOfWork && !shouldYield) {
-       nextUnitOfWork = performUnitOfWork(nextUnitOfWork);
-       shouldYield = deadline.timeRemaining() < 1;
-     }
-     // 还有任务未完成，请求下一次调度
-     if (nextUnitOfWork) {
-       requestIdleCallback(workLoop);
-     }
-   }
-   ```
-
-### 工作流程
-
-```
-1. 触发更新（setState）
-2. 创建更新任务，加入调度队列
-3. 调度器按优先级排序
-4. 协调阶段（可中断）
-   - 深度优先遍历Fiber树
-   - Diff算法标记副作用
-   - 时间切片控制
-5. 提交阶段（不可中断）
-   - 一次性提交所有变更
-   - 更新真实DOM
-```
-
-### Fiber架构优势
-
-1. **可中断渲染**
-   - 大组件不再阻塞主线程
-   - 高优先级任务可以插队
-   - 浏览器保持响应
-
-2. **任务优先级**
-   ```jsx
-   // React 18
-   import { useTransition } from 'react';
-
-   function App() {
-     const [isPending, startTransition] = useTransition();
-
-     const handleClick = () => {
-       startTransition(() => {
-         // 标记为低优先级更新
-         setSearchResults(bigArray.filter(...));
-       });
-     };
-   }
-   ```
-
-3. **更好的动画流畅度**
-   - 60fps：每帧16.6ms
-   - 长任务拆分，不阻塞动画
-
-4. **Suspense支持**
-   ```jsx
-   <Suspense fallback={<Loading />}>
-     <AsyncComponent />
-   </Suspense>
-   ```
-
-5. **并发特性（React 18）**
-   - 自动批处理
-   - Transitions
-   - Suspense改进
-
-### Fiber与Stack架构对比
-
-| 特性 | Stack（React 15） | Fiber（React 16+） |
-|------|------------------|-------------------|
-| 更新方式 | 同步递归 | 异步可中断 |
-| 任务调度 | 无 | 优先级队列 |
-| 时间切片 | 不支持 | 支持 |
-| 中断恢复 | 不支持 | 支持 |
-| 优先级 | 无 | 多级优先级 |
-| 并发渲染 | 不支持 | 支持（React 18+） |
-
-### 调度器实现
-
-React使用`Scheduler`包实现任务调度：
-
-```javascript
-// 伪代码
-function scheduleCallback(priorityLevel, callback) {
-  const startTime = performance.now();
-  const expirationTime = startTime + timeout[priorityLevel];
-
-  const newTask = {
-    callback,
-    priorityLevel,
-    startTime,
-    expirationTime
-  };
-
-  // 加入优先级队列
-  push(taskQueue, newTask);
-
-  // 请求调度
-  requestHostCallback(flushWork);
-}
-```
-
-**浏览器调度API：**
-- `requestIdleCallback`：React早期使用
-- `MessageChannel`：当前使用，更高效
-- `setTimeout`：降级方案
-
----
 
 ## 6. useState和useReducer有什么区别？
 
