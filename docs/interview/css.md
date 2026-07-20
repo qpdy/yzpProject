@@ -39,6 +39,8 @@ title: CSS（面试要点）
 - [前端水印了解多少？](#33-前端水印了解多少)
 - [前端如何做页面主题色切换？](#34-前端如何做页面主题色切换)
 - [样式隔离方式有哪些？](#35-样式隔离方式有哪些)
+- [display: inline、display: block 和 display: inline-block 有什么区别？](#36-display-inlinedisplay-block-和-display-inline-block-有什么区别)
+- [link和@import引入CSS样式有什么区别？](#37-link和import引入css样式有什么区别)
 
 ---
 
@@ -2679,3 +2681,49 @@ registerMicroApps([
 
 start();
 ```
+
+---
+
+## 36. display: inline、display: block 和 display: inline-block 有什么区别？
+
+- **display: inline;**
+  - 元素显示为行内元素，不会独占一行
+  - 无法设置 width 和 height 属性
+  - margin 和 padding 的上下部分不会影响其他元素
+  - 典型例子：`<span>`、`<a>`、`<strong>`
+
+- **display: block;**
+  - 元素显示为块级元素，独占一行
+  - 可以设置 width、height、margin、padding 等所有属性
+  - 默认宽度为父元素的 100%
+  - 典型例子：`<div>`、`<p>`、`<h1>-<h6>`
+
+- **display: inline-block;**
+  - 结合了 inline 和 block 的特性
+  - 元素不会独占一行（类似 inline）
+  - 可以设置 width、height、margin、padding 等所有属性（类似 block）
+  - 典型例子：按钮、图标等需要并排显示但又需要设置尺寸的元素
+
+---
+
+## 37. link和@import引入CSS样式有什么区别？
+
+- **从属关系**：
+  - `<link>` 是 HTML 标签，属于 HTML 范畴
+  - `@import` 是 CSS 提供的规则，属于 CSS 范畴
+
+- **加载顺序**：
+  - `<link>` 在页面加载时同时加载 CSS 文件
+  - `@import` 在页面全部下载完后再加载 CSS 文件，可能导致页面闪烁
+
+- **兼容性**：
+  - `<link>` 兼容所有浏览器
+  - `@import` 在 IE5 以下版本不被支持
+
+- **DOM 操作**：
+  - `<link>` 可以通过 JavaScript 操作 DOM 动态添加或修改
+  - `@import` 无法通过 JavaScript 动态操作
+
+- **权重**：
+  - 两者引入的样式权重（优先级）没有区别，优先级只取决于选择器权重、`!important` 和层叠顺序
+  - 需要注意的是：`@import` 必须写在样式表顶部，其引入的规则会被主样式表中后出现的同优先级规则覆盖——这是层叠顺序（书写位置）的结果，并非引入方式本身的权重差异

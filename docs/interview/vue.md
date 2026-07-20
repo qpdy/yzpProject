@@ -873,6 +873,378 @@ const router = new VueRouter({
 })
 ```
 
+### hash 模式和 history 模式的区别？
+
+前端路由有两种主流实现模式：**hash 模式** 和 **history 模式**。这两个模式使用的都是**浏览器原生 API**，不是任何前端框架特有的，Vue Router 只是对其进行了封装。
+
+#### 什么是 hash 模式
+
+URL 中带有 `#` 的部分，例如 `http://example.com/#/user/1`。
+
+`#` 及其后面的内容称为 **hash（哈希/片段标识符）**，它具有以下特点：
+
+- hash 变化**不会**导致页面刷新
+- 浏览器会记录 hash 变化到历史记录中
+- 可以通过 `window.location.hash` 读写
+- 通过 `hashchange` 事件监听
+
+```javascript
+// 修改 hash（不刷新页面）
+window.location.hash = '#/user/1';
+
+// 读取 hash
+window.location.hash; // '#/user/1'
+
+// 监听 hash 变化
+window.addEventListener('hashchange', (e) => {
+  console.log('old URL:', e.oldURL);
+  console.log('new URL:', e.newURL);
+});
+```
+
+#### 什么是 history 模式
+
+URL 中**没有** `#`，例如 `http://example.com/user/1`。
+
+基于 HTML5 History API（`pushState`、`replaceState`、`popstate`）实现，特点：
+
+- URL 看起来更干净，像真实的 URL
+- 需要服务器配合配置 fallback，否则刷新会 404
+- 通过 `popstate` 事件监听前进/后退
+- `pushState` 可携带任意 `state` 对象
+
+```javascript
+// 入栈一条历史记录
+history.pushState({ page: 1, userId: 123 }, 'title', '/user/1');
+
+// 替换当前历史记录
+history.replaceState({ page: 2 }, 'title', '/user/2');
+
+// 后退 / 前进
+history.back();
+history.forward();
+history.go(-2);
+
+// 监听前进后退（注意：pushState/replaceState 不会触发）
+window.addEventListener('popstate', (e) => {
+  console.log('state:', e.state);
+  console.log('pathname:', location.pathname);
+});
+```
+
+#### 核心区别对比
+
+| 特性 | hash 模式 | history 模式 |
+|------|----------|-------------|
+| URL 形式 | `example.com/#/user/1` | `example.com/user/1` |
+| 实现原理 | 监听 `hashchange` | History API + `popstate` |
+| 服务器配置 | 不需要 | 需要 fallback |
+| SEO | 较差（爬虫忽略 `#`） | 较好（需 SSR 配合） |
+| 浏览器兼容 | IE8+ | IE10+ |
+| 状态对象 | ❌ 不支持 | ✅ 支持任意 state |
+| URL 美观度 | 较差（带 `#`） | 较好 |
+| 部署难度 | 简单 | 需服务器配合 |
+
+#### 实现原理详解
+
+##### hash 模式手写实现
+
+```javascript
+class HashRouter {
+  constructor() {
+    this.routes = {}; // 路由表：{ '/user': callback }
+    this.currentUrl = '';
+
+    // 监听 hash 变化（包括前进/后退、JS 修改）
+    window.addEventListener('hashchange', () => this.refresh());
+
+    // 首次加载也要触发一次
+    window.addEventListener('load', () => this.refresh());
+  }
+
+  // 注册路由
+  route(path, callback) {
+    this.routes[path] = callback;
+  }
+
+  // 根据当前 hash 执行对应回调
+  refresh() {
+    // location.hash 形如 '#/user/1'，slice(1) 得到 '/user/1'
+    this.currentUrl = location.hash.slice(1) || '/';
+    this.routes[this.currentUrl]?.();
+  }
+}
+
+// 使用
+const router = new HashRouter();
+
+router.route('/', () => console.log('首页'));
+router.route('/user', () => console.log('用户页'));
+router.route('/about', () => console.log('关于页'));
+
+// 跳转（这几种方式都会触发 hashchange）
+window.location.hash = '#/user';     // 直接修改 hash
+window.location.href = '#/about';   // 通过 href
+// 点击锚点链接 <a href="#/user">用户</a> 也会触发
+```
+
+##### history 模式手写实现
+
+```javascript
+class HistoryRouter {
+  constructor() {
+    this.routes = {};
+    this.currentUrl = '';
+
+    // 前进/后退触发 popstate（注意：pushState/replaceState 不会触发）
+    window.addEventListener('popstate', () => this.refresh());
+
+    // 首次加载
+    window.addEventListener('load', () => this.refresh());
+
+    // 拦截 a 标签点击，避免默认行为导致刷新
+    document.addEventListener('click', (e) => {
+      const a = e.target.closest('a[data-link]');
+      if (!a) return;
+      e.preventDefault();
+      this.navigate(a.getAttribute('href'));
+    });
+  }
+
+  route(path, callback) {
+    this.routes[path] = callback;
+  }
+
+  navigate(path) {
+    history.pushState({}, '', path);
+    this.refresh();
+  }
+
+  refresh() {
+    this.currentUrl = location.pathname || '/';
+    this.routes[this.currentUrl]?.();
+  }
+}
+
+// 使用
+const router = new HistoryRouter();
+router.route('/', () => console.log('首页'));
+router.route('/user', () => console.log('用户页'));
+router.navigate('/user'); // 编程式跳转
+```
+
+#### 服务器配置
+
+##### hash 模式
+
+**不需要任何配置**。因为 `#` 后面的内容是 fragment identifier（片段标识符），**不会被发送到服务器**。无论 hash 怎么变，浏览器请求的始终是同一个 `index.html`。
+
+可以用 Network 面板验证：访问 `http://localhost:3000/#/user/1` 时，请求的 URL 是 `http://localhost:3000/`，没有 `/user/1`。
+
+##### history 模式
+
+**必须配置服务器**，将所有未匹配到的路径 fallback 到 `index.html`，否则刷新会 404。
+
+**Nginx 配置：**
+
+```nginx
+server {
+  listen 80;
+  server_name example.com;
+  root /var/www/html;
+
+  location / {
+    try_files $uri $uri/ /index.html;
+  }
+}
+```
+
+**Apache 配置：**
+
+```apache
+<IfModule mod_rewrite.c>
+  RewriteEngine On
+  RewriteBase /
+  RewriteRule ^index\.html$ - [L]
+  RewriteCond %{REQUEST_FILENAME} !-f
+  RewriteCond %{REQUEST_FILENAME} !-d
+  RewriteRule . /index.html [L]
+</IfModule>
+```
+
+**Node.js (Express) 配置：**
+
+```javascript
+const express = require('express');
+const path = require('path');
+const app = express();
+
+// 静态资源
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// 所有 GET 请求都返回 index.html
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+});
+
+app.listen(3000);
+```
+
+#### 在 Vue Router 中使用
+
+```javascript
+import { createRouter, createWebHashHistory, createWebHistory } from 'vue-router';
+
+// history 模式
+const router = createRouter({
+  history: createWebHistory(),
+  routes: [...]
+});
+
+// hash 模式
+const router = createRouter({
+  history: createWebHashHistory(),
+  routes: [...]
+});
+```
+
+#### pushState vs replaceState
+
+```javascript
+// pushState：会留下历史记录
+history.pushState({ page: 1 }, 'title', '/page1');
+// 历史栈：[/, /page1]
+// 点击浏览器后退 → 回到 /
+
+// replaceState：替换当前记录，不会留下历史
+history.replaceState({ page: 2 }, 'title', '/page2');
+// 历史栈：[/, /page2]（/page1 被 /page2 替换）
+// 点击浏览器后退 → 不会回到 /page1，而是直接回到 /
+```
+
+**使用建议：**
+
+- 用户**主动操作**（点击链接、跳转详情）→ `pushState`
+- **替换当前视图**（登录成功后跳转首页）→ `replaceState`，避免后退又回到登录页
+
+#### 常见面试题
+
+##### Q1: 为什么 hash 模式不需要服务器配置？
+
+A：因为 `#` 后面的内容是 **fragment identifier（片段标识符）**，**不会被发送到服务器**。浏览器永远不会向服务器请求这部分内容。无论 hash 怎么变化，请求的 URL 始终是 `example.com/`，服务器返回的始终是同一个 `index.html`。
+
+##### Q2: history 模式刷新为什么会 404？
+
+A：因为刷新页面时会**真实地向服务器发起 HTTP 请求**。
+
+当用户访问 `example.com/user/1` 时，浏览器请求的是 `/user/1` 这个路径，服务器找不到 `/user/1` 这个文件（SPA 只有一个 `index.html`），所以返回 404。
+
+解决方案：让服务器将所有路径都 fallback 到 `index.html`（见上面的 Nginx/Apache/Express 配置）。
+
+##### Q3: history.pushState 改变了 URL 为什么不刷新页面？
+
+A：`pushState` 是 HTML5 提供的新 API，它只**修改浏览器的 URL 显示和历史记录栈**，并不会真正去服务器请求资源。浏览器地址栏变化了，但页面内容不变。这就是实现无刷新路由的关键。
+
+##### Q4: hashchange 和 popstate 事件的区别？
+
+| 事件 | 触发时机 |
+|------|---------|
+| `hashchange` | hash 变化时触发（手动修改、JS 修改、前进后退、锚点点击） |
+| `popstate` | 浏览器活动历史条目变化时触发（前进/后退），**`pushState`/`replaceState` 不会触发** |
+
+```javascript
+// hashchange：能监听到所有 hash 变化
+window.addEventListener('hashchange', () => {});
+
+// popstate：只能监听到前进/后退，pushState 不会触发
+window.addEventListener('popstate', (e) => {
+  console.log(e.state); // pushState 时传入的 state
+});
+```
+
+所以 history 模式下，**编程式跳转时需要手动调用刷新逻辑**，只有用户点击浏览器前进/后退才依赖 `popstate`。
+
+##### Q5: hash 模式如何携带参数？
+
+A：通过 URL 的 hash 部分携带：
+
+```javascript
+// 方式 1：路径参数
+window.location.hash = '#/user/123';
+
+// 方式 2：查询字符串
+window.location.hash = '#/user?id=123&name=abc';
+
+// 解析 hash
+function parseHash() {
+  const hash = location.hash.slice(1); // '/user?id=123'
+  const [pathname, search] = hash.split('?');
+  const params = Object.fromEntries(new URLSearchParams(search));
+  return { pathname, params };
+}
+```
+
+##### Q6: hash 模式的缺点是什么？
+
+1. **SEO 不友好**：搜索引擎会忽略 `#` 后面的内容，难以抓取动态路由
+2. **URL 不美观**：多了一个 `#` 符号
+3. **无法传递 state**：`hashchange` 事件只有 `oldURL` 和 `newURL`，没有 state 参数
+4. **锚点定位冲突**：如果页面有 `<a href="#section">`，会和路由冲突，需要特殊处理
+
+##### Q7: 如何在 history 模式中携带复杂数据？
+
+A：利用 `pushState` 的第一个参数 state：
+
+```javascript
+history.pushState(
+  { userId: 123, from: 'list', timestamp: Date.now() },
+  '',
+  '/user/123'
+);
+
+// 在 popstate 中获取
+window.addEventListener('popstate', (e) => {
+  console.log(e.state); // { userId: 123, from: 'list', ... }
+});
+```
+
+> 注意：state 必须是**可序列化的对象**（最终存到磁盘），不能存函数、DOM 节点等。
+
+##### Q8: 两种模式哪个会被浏览器优先加载？
+
+A：浏览器对 `#` 后面的内容**完全忽略**，不会发送到服务器。所以 `example.com/#/user/1` 和 `example.com/#/about` 在服务器看来是同一个请求 `example.com/`。
+
+而 history 模式下，`example.com/user/1` 和 `example.com/about` 是**完全不同的请求**，服务器需要分别处理（或者用 fallback 把所有请求都指向 index.html）。
+
+##### Q9: 如何解决 history 模式刷新 404 的问题？
+
+除了上面提到的服务器配置外，还有两个思路：
+
+1. **静态导出（SSG）**：用 Nuxt.js 在构建时预渲染所有路由
+2. **动态加载资源**：将 index.html 内的 JS 资源路径改成相对路径 `./`，避免子路径下资源 404
+
+```javascript
+// webpack output 配置
+output: {
+  publicPath: './', // 相对路径
+  filename: 'bundle.js'
+}
+```
+
+#### 总结
+
+| 维度 | hash | history |
+|------|------|---------|
+| 本质 | URL 锚点 | HTML5 History API |
+| 兼容性 | 更好（IE8+） | 略差（IE10+） |
+| 服务器 | 无需配置 | 需要 fallback |
+| SEO | 差 | 好 |
+| URL 美观 | 差（带 #） | 较好 |
+| state | ❌ 不支持 | ✅ 支持 |
+| 推荐场景 | 静态托管、无 SEO 需求 | 现代应用、产品级项目 |
+
+**现代项目推荐使用 history 模式**，URL 更美观、SEO 更友好、可以传递 state。如果无法控制服务器配置（如 GitHub Pages、OSS 静态托管），可使用 hash 模式作为妥协方案。
+
 ### 如何选择路由模式？
 
 1. **新项目且有服务器配置权限**：推荐使用History模式，URL更美观，利于SEO
