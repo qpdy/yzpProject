@@ -41,6 +41,7 @@ title: CSS（面试要点）
 - [样式隔离方式有哪些？](#35-样式隔离方式有哪些)
 - [display: inline、display: block 和 display: inline-block 有什么区别？](#36-display-inlinedisplay-block-和-display-inline-block-有什么区别)
 - [link和@import引入CSS样式有什么区别？](#37-link和import引入css样式有什么区别)
+- [什么是 CSS 盒模型？box-sizing 的作用是什么？](#38-什么是-css-盒模型box-sizing-的作用是什么)
 
 ---
 
@@ -2727,3 +2728,76 @@ start();
 - **权重**：
   - 两者引入的样式权重（优先级）没有区别，优先级只取决于选择器权重、`!important` 和层叠顺序
   - 需要注意的是：`@import` 必须写在样式表顶部，其引入的规则会被主样式表中后出现的同优先级规则覆盖——这是层叠顺序（书写位置）的结果，并非引入方式本身的权重差异
+
+---
+
+## 38. 什么是 CSS 盒模型？box-sizing 的作用是什么？
+
+### 盒模型的组成
+
+每个 HTML 元素都被表示为一个矩形盒子，从内到外由四部分组成：
+
+- **content（内容）**：元素的实际内容，如文字、图片
+- **padding（内边距）**：内容到边框之间的空间
+- **border（边框）**：围绕在内边距外侧的线
+- **margin（外边距）**：边框之外、用于拉开与其他元素距离的空间
+
+```css
+.box {
+  width: 200px;
+  padding: 10px;
+  border: 5px solid #333;
+  margin: 20px;
+}
+```
+
+### 两种盒模型
+
+- **标准盒模型（content-box，默认）**
+  - `width` / `height` 只包含 content
+  - 实际占用宽度 = `width` + 左右 `padding` + 左右 `border`（不含 margin）
+  - 上例实际宽度 = 200 + 10×2 + 5×2 = 230px
+
+- **IE 盒模型（怪异盒模型，border-box）**
+  - `width` / `height` 包含 content + padding + border
+  - 实际占用宽度 = `width`（固定不变）
+  - 上例实际宽度仍为 200px，content 被压缩为 170px
+
+### box-sizing 的作用
+
+`box-sizing` 用于切换两种盒模型：
+
+```css
+/* 标准盒模型（默认） */
+.box-1 {
+  box-sizing: content-box;
+}
+
+/* IE 盒模型（推荐） */
+.box-2 {
+  box-sizing: border-box;
+}
+```
+
+### 实际项目最佳实践
+
+几乎所有现代项目都会全局开启 `border-box`，让宽度计算更直观：
+
+```css
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+```
+
+**为什么推荐 border-box？**
+
+- 设置 `width: 200px` 后，无论怎么加 padding 和 border，元素总宽度都是 200px
+- 布局更可预期，避免「加了 padding 后元素撑破容器」的问题
+- 主流框架（Bootstrap、Tailwind 等）默认都用 border-box
+
+### 补充要点
+
+- `margin` 不计入元素的实际尺寸，但相邻块级元素的垂直 `margin` 会发生**外边距合并（margin collapse）**：取较大值而非累加
+- 行内元素设置 `width`、`height`、垂直方向的 `padding`/`margin` 表现特殊，推荐改用 `inline-block` 或 `flex`

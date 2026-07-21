@@ -55,6 +55,7 @@ title: React（面试要点）
 - [手写实现 useLayoutEffect](#47-手写实现-uselayouteffect)
 - [不使用脚手架手动搭建 React 应用](#48-不使用脚手架手动搭建-react-应用)
 - [React 路由变化监听](#49-react-路由变化监听)
+- [React 19有哪些新特性？](#50-react-19有哪些新特性)
 
 ---
 
@@ -7845,3 +7846,141 @@ const routes = [
 
 ---
 
+## 50. React 19有哪些新特性？
+
+React 19 于 2024 年 12 月正式发布，重点围绕 **Actions（异步动作）**、**Server Components 稳定** 和 **开发者体验优化**。
+
+### 1. Actions（动作）
+
+可以把**异步函数**直接交给 `<form>`、按钮等，React 自动管理 pending、error、乐观更新：
+
+```jsx
+function ChangeName({ name, setName }) {
+  const [error, submitAction, isPending] = useActionState(
+    async (prev, formData) => {
+      const error = await updateName(formData.get('name'));
+      if (error) return error;
+      setName(formData.get('name'));
+      return null;
+    },
+    null
+  );
+
+  return (
+    <form action={submitAction}>
+      <input name="name" />
+      <button disabled={isPending}>更新</button>
+      {error && <p>{error}</p>}
+    </form>
+  );
+}
+```
+
+配合三个新 Hook：
+
+- **`useActionState`**：管理表单 action 的状态（原 `useFormState`）
+- **`useFormStatus`**：在表单子组件中读取 pending 状态
+- **`useOptimistic`**：乐观更新（请求未完成时先展示预期结果）
+
+### 2. `use` Hook
+
+`use` 是一个**可以在条件/循环中调用**的 API，用于读取 Promise 或 Context：
+
+```jsx
+import { use } from 'react';
+
+function Comments({ commentsPromise }) {
+  // 读取 Promise，组件会挂起直到 resolve（需配合 <Suspense>）
+  const comments = use(commentsPromise);
+  return comments.map(c => <p key={c.id}>{c.text}</p>);
+}
+
+function Theme() {
+  // 也可以读取 Context，且能放在 if 里
+  if (enabled) {
+    const theme = use(ThemeContext);
+    return <div className={theme}>...</div>;
+  }
+}
+```
+
+> 与其他 Hook 不同，`use` 可以放在 `if` 里，因为它本质是「读取一个当前值」。
+
+### 3. ref 作为 prop（逐步告别 forwardRef）
+
+函数组件**可以直接接收 `ref` 作为 prop**，不再强制使用 `forwardRef`：
+
+```jsx
+// React 19：直接接收 ref
+function MyInput({ placeholder, ref }) {
+  return <input placeholder={placeholder} ref={ref} />;
+}
+
+// 使用
+<MyInput ref={inputRef} />
+```
+
+> `forwardRef` 仍可用，但未来会逐步弃用（详见第 43 题）。
+
+### 4. 文档元数据与资源加载
+
+可以直接在组件里写 `<title>`、`<meta>`、`<link>`，React 自动提升到 `<head>`：
+
+```jsx
+function BlogPost({ post }) {
+  return (
+    <article>
+      <title>{post.title}</title>
+      <meta name="author" content={post.author} />
+      <link rel="stylesheet" href="/styles.css" />
+      <h1>{post.title}</h1>
+    </article>
+  );
+}
+```
+
+资源加载 API：
+
+```jsx
+import { preload, preinit, prefetchDNS, preconnect } from 'react-dom';
+
+preload('/fonts/font.woff2', { as: 'font' });
+preinit('/style.css', { as: 'style' });
+prefetchDNS('https://example.com');
+preconnect('https://example.com');
+```
+
+### 5. Context 作为 Provider
+
+不再需要 `.Provider`，Context 本身即可作为 Provider：
+
+```jsx
+const ThemeContext = createContext('');
+
+// React 19 写法
+<ThemeContext value="dark">
+  <App />
+</ThemeContext>
+
+// 旧写法（仍兼容）
+<ThemeContext.Provider value="dark">
+  <App />
+</ThemeContext.Provider>
+```
+
+### 6. 其他改进
+
+- **ref 回调可返回清理函数**：`<div ref={el => { /* setup */; return () => cleanup() }} />`
+- **Server Components 正式稳定**（详见第 28 题）
+- **改进的错误处理**：`createRoot` / `hydrateRoot` 支持 `onUncaughtError` / `onCaughtError`
+- **清理废弃 API**：移除 `ReactDOM.render`、`react-test-renderer` 等旧 API
+
+### 面试记忆要点
+
+| 特性 | 作用 |
+|------|------|
+| Actions + useActionState/useFormStatus/useOptimistic | 简化异步表单/请求的状态管理 |
+| `use` | 条件式读取 Promise / Context |
+| ref as prop | 告别 forwardRef |
+| Document Metadata | 组件内直接写 title/meta，自动提升到 head |
+| Context as Provider | 简化 Provider 写法 |
