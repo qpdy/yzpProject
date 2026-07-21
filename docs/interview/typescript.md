@@ -1,45 +1,9 @@
 ---
 sidebar_position: 4
-title: TypeScript（面试要点）
+title: TypeScript
 ---
 
-# TypeScript 面试要点
-
-## 目录
-- [TypeScript是什么？有什么优势？](#1-typescript是什么有什么优势)
-- [TypeScript中的基础类型有哪些？](#2-typescript中的基础类型有哪些)
-- [TypeScript中的接口（Interface）是什么？如何使用？](#3-typescript中的接口interface是什么如何使用)
-- [interface 和 type 有什么区别？](#4-interface-和-type-有什么区别)
-- [TypeScript中的类（Class）如何使用？](#5-typescript中的类class如何使用)
-- [TypeScript中的泛型（Generics）是什么？如何使用？](#6-typescript中的泛型generics是什么如何使用)
-- [TypeScript中的模块（Modules）是如何工作的？](#7-typescript中的模块modules是如何工作的)
-- [TypeScript中的高级类型有哪些？](#8-typescript中的高级类型有哪些)
-- [TypeScript中的类型推断是如何工作的？](#9-typescript中的类型推断是如何工作的)
-- [TypeScript配置文件(tsconfig.json)如何配置？](#10-typescript配置文件tsconfigjson如何配置)
-- [TypeScript与JavaScript的区别是什么？](#11-typescript与javascript的区别是什么)
-- [TypeScript中的Utility Types有哪些？](#12-typescript中的utility-types有哪些)
-- [TypeScript中的命名空间（Namespace）和模块（Module）有什么区别？](#13-typescript中的命名空间namespace和模块module有什么区别)
-- [TypeScript中的声明合并（Declaration Merging）是什么？](#14-typescript中的声明合并declaration-merging是什么)
-- [TypeScript中的类型兼容性（Type Compatibility）是如何工作的？](#15-typescript中的类型兼容性type-compatibility是如何工作的)
-- [TypeScript中的this类型是如何工作的？](#16-typescript中的this类型是如何工作的)
-- [TypeScript中的映射类型（Mapped Types）如何使用？](#17-typescript中的映射类型mapped-types如何使用)
-- [TypeScript中的条件类型（Conditional Types）是什么？](#18-typescript中的条件类型conditional-types是什么)
-- [TypeScript中的模板字面量类型（Template Literal Types）是什么？](#19-typescript中的模板字面量类型template-literal-types是什么)
-- [TypeScript中的`declare`关键字有什么用？](#20-typescript中的declare关键字有什么用)
-- [解释一下TypeScript中的枚举（Enum）](#21-typescript中的枚举enum)
-- [TypeScript中的方法重写（Override）是什么？](#22-typescript中的方法重写override是什么)
-- [什么是TypeScript Source Map（映射文件）？](#23-typescript中的source-map是什么)
-- [TypeScript中的类类型接口是什么？](#24-typescript中的类类型接口是什么)
-- [TypeScript中`never`和`void`有什么区别？](#25-typescript中的never和void有什么区别)
-- [如何在TypeScript中使用Mixin？](#26-typescript中的mixin)
-- [TypeScript中的类型断言是什么？](#27-typescript中的类型断言是什么)
-- [如何检查TypeScript中的null和undefined？](#28-typescript中的null和undefined)
-
-### 进阶内容（低频面试题）
-- [TypeScript中的装饰器（Decorators）](#typescript中的装饰器decorators)
-- [TypeScript中的装饰器元数据（Decorator Metadata）](#typescript中的装饰器元数据decorator-metadata)
-
----
+# TypeScript 
 
 ## 1. TypeScript是什么？有什么优势？
 

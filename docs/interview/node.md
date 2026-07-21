@@ -1,21 +1,9 @@
 ---
 sidebar_position: 7
-title: Node.js（面试要点）
+title: Node.js
 ---
 
-# Node.js 面试要点
-
-## 目录
-- [Node.js的Event Loop是怎样的？](#1-nodejs的event-loop是怎样的)
-- [Node.js多进程架构模型](#2-nodejs多进程架构模型)
-- [Node.js内存泄漏排查](#3-nodejs内存泄漏排查)
-- [Node.js子进程与进程间通信](#4-nodejs子进程与进程间通信)
-- [脚手架CLI开发流程](#5-脚手架cli开发流程)
-- [文件遍历查找实现](#6-文件遍历查找实现)
-- [文件上传处理](#7-文件上传处理)
-- [WebSocket 和 SSE 的区别](#8-websocket-和-sse-的区别)
-
----
+# Node.js 
 
 ## 1. Node.js的Event Loop是怎样的？
 

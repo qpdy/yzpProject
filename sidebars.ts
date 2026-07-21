@@ -13,65 +13,6 @@ import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
  Create as many sidebars as you want.
  */
 const sidebars: SidebarsConfig = {
-  frontendSidebar: [
-    {
-      type: 'category',
-      label: '前端开发规范',
-      items: [
-        'frontend-guidelines',
-        'code-formatting',
-        'comment-guidelines',
-        'naming-conventions',
-      ],
-    },
-    {
-      type: 'category',
-      label: '错误处理与性能优化',
-      items: [
-        'error-handling',
-        'performance-optimization',
-      ],
-    },
-    {
-      type: 'category',
-      label: '问题解决方案',
-      items: [
-        'frontend-issues',
-        'vue-react-issues',
-        'frontend-performance',
-      ],
-    },
-    {
-      type: 'category',
-      label: '前端知识体系',
-      items: [
-        'frontend-knowledge',
-      ],
-    },
-  ],
-  backendSidebar: [
-    {
-      type: 'category',
-      label: '后端开发规范',
-      items: [
-        'backend-guidelines',
-      ],
-    },
-    {
-      type: 'category',
-      label: '后端知识体系',
-      items: [
-        'backend-knowledge',
-      ],
-    },
-    {
-      type: 'category',
-      label: 'Go 面试题',
-      items: [
-        'interview/go',
-      ],
-    },
-  ],
   interviewSidebar: [
     {
       type: 'category',

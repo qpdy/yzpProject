@@ -1,63 +1,9 @@
 ---
 sidebar_position: 6
-title: React（面试要点）
+title: React
 ---
 
-# React 面试要点
-
-## 目录
-- [Fiber架构是什么？解决了什么问题？](#1-fiber架构是什么解决了什么问题)
-- [React生命周期有哪些？](#2-react生命周期有哪些)
-- [类组件和函数组件有什么区别？](#3-类组件和函数组件有什么区别)
-- [虚拟DOM是什么？有什么优势？](#4-虚拟dom是什么有什么优势)
-- [useState和useReducer有什么区别？](#5-usestate和usereducer有什么区别)
-- [useEffect和useLayoutEffect有什么区别？](#6-useeffect和uselayouteffect有什么区别)
-- [useMemo和useCallback有什么区别？](#7-usememo和usecallback有什么区别)
-- [React.memo的作用是什么？](#8-reactmemo的作用是什么)
-- [Context API如何使用？有什么局限？](#9-context-api如何使用有什么局限)
-- [Redux核心概念是什么？](#10-redux核心概念是什么)
-- [setState是同步还是异步？](#11-setstate是同步还是异步)
-- [React事件机制是怎样的？](#12-react事件机制是怎样的)
-- [React Diff算法原理是什么？](#13-react-diff算法原理是什么)
-- [Key的作用是什么？为什么不用索引？](#14-key的作用是什么为什么不用索引)
-- [Error Boundary是什么？](#15-error-boundary是什么)
-- [Suspense和React Lazy如何使用？](#16-suspense和react-lazy如何使用)
-- [React性能优化有哪些方法？](#17-react性能优化有哪些方法)
-- [React 18有哪些新特性？](#18-react-18有哪些新特性)
-- [受控组件和非受控组件有什么区别？](#19-受控组件和非受控组件有什么区别)
-- [Redux项目结构如何划分？中间件原理是什么？](#20-redux项目结构如何划分中间件原理是什么)
-- [JSX如何转换成真实DOM？](#21-jsx如何转换成真实dom)
-- [useEffect如何支持async/await？](#22-useeffect如何支持asyncawait)
-- [为什么不能在循环、条件中调用Hooks？](#23-为什么不能在循环条件中调用hooks)
-- [什么是React Hooks的闭包陷阱？如何解决？](#24-什么是react-hooks的闭包陷阱如何解决)
-- [父组件如何调用子组件的方法？](#25-父组件如何调用子组件的方法)
-- [为什么React需要Fiber而Vue不需要？](#26-为什么react需要fiber而vue不需要)
-- [react-router 和原生路由有什么区别？](#27-react-router-和原生路由有什么区别)
-- [Next.js 与 React SSR](#28-nextjs-与-react-ssr)
-- [React 的批处理（Batching）是什么？React 18 前后有什么区别？](#29-react-的批处理batching是什么react-18-前后有什么区别)
-- [React 中组件通信方式有哪些？](#30-react-中组件通信方式有哪些)
-- [useEffect 依赖项是如何比较的？为什么对象/数组要写进依赖？](#31-useeffect-依赖项是如何比较的为什么对象数组要写进依赖)
-- [useTransition 和 useDeferredValue 有什么区别？](#32-usetransition-和-usedeferredvalue-有什么区别)
-- [React 中如何实现组件缓存（Keep-Alive）？](#33-react-中如何实现组件缓存keep-alive)
-- [state 和 props 有什么区别？](#34-state-和-props-有什么区别)
-- [为什么不能直接修改 state？](#35-为什么不能直接修改-state)
-- [React 中 render 的触发条件有哪些？](#36-react-中-render-的触发条件有哪些)
-- [表单中 onChange 和原生 DOM 的 change 有什么区别？](#37-表单中-onchange-和原生-dom-的-change-有什么区别)
-- [组件为什么必须返回单个根节点？React 16 之后有什么变化？](#38-组件为什么必须返回单个根节点react-16-之后有什么变化)
-- [React 中如何渲染 HTML？有什么风险？](#39-react-中如何渲染-html有什么风险)
-- [什么情况下组件会重新渲染？如何避免不必要的 re-render？](#40-什么情况下组件会重新渲染如何避免不必要的-re-render)
-- [自定义 Hook 怎么设计？](#41-自定义-hook-怎么设计)
-- [Redux / Zustand / MobX 这类状态管理解决了什么问题？](#42-redux--zustand--mobx-这类状态管理解决了什么问题)
-- [forwardRef 和 useImperativeHandle 是什么？](#43-forwardref-和-useimperativehandle-是什么)
-- [React 18 并发渲染是什么？是不是多线程？](#44-react-18-并发渲染是什么是不是多线程)
-- [Fiber 为什么可以中断和恢复？](#45-fiber-为什么可以中断和恢复)
-- [SSR、Hydration、hydration mismatch 是什么？](#46-ssrhydrationhydration-mismatch-是什么)
-- [手写实现 useLayoutEffect](#47-手写实现-uselayouteffect)
-- [不使用脚手架手动搭建 React 应用](#48-不使用脚手架手动搭建-react-应用)
-- [React 路由变化监听](#49-react-路由变化监听)
-- [React 19有哪些新特性？](#50-react-19有哪些新特性)
-
----
+# React 
 
 ## React 渲染流程（Fiber 工作循环）
 

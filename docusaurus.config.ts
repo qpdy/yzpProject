@@ -83,18 +83,18 @@ const config: Config = {
         src: 'img/logo.svg',
       },
       items: [
-        {
-          type: 'docSidebar',
-          sidebarId: 'frontendSidebar',
-          position: 'left',
-          label: '文档',
-        },
-        {
-          type: 'docSidebar',
-          sidebarId: 'backendSidebar',
-          position: 'left',
-          label: '后端开发',
-        },
+        // {
+        //   type: 'docSidebar',
+        //   sidebarId: 'frontendSidebar',
+        //   position: 'left',
+        //   label: '文档',
+        // },
+        // {
+        //   type: 'docSidebar',
+        //   sidebarId: 'backendSidebar',
+        //   position: 'left',
+        //   label: '后端开发',
+        // },
         {
           type: 'docSidebar',
           sidebarId: 'interviewSidebar',
