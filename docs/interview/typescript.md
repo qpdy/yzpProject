@@ -5,6 +5,40 @@ title: TypeScript
 
 # TypeScript 
 
+## 目录
+
+- [1. TypeScript是什么？有什么优势？](#1-typescript是什么有什么优势)
+- [2. TypeScript中的基础类型有哪些？](#2-typescript中的基础类型有哪些)
+- [3. TypeScript中的接口（Interface）是什么？如何使用？](#3-typescript中的接口interface是什么如何使用)
+- [4. interface 和 type 有什么区别？](#4-interface-和-type-有什么区别)
+- [5. TypeScript中的类（Class）如何使用？](#5-typescript中的类class如何使用)
+- [6. TypeScript中的泛型（Generics）是什么？如何使用？](#6-typescript中的泛型generics是什么如何使用)
+- [7. TypeScript中的模块（Modules）是如何工作的？](#7-typescript中的模块modules是如何工作的)
+- [8. TypeScript中的装饰器（Decorators）是什么？](#8-typescript中的装饰器decorators是什么)
+- [9. TypeScript中的高级类型有哪些？](#9-typescript中的高级类型有哪些)
+- [10. TypeScript中的类型推断是如何工作的？](#10-typescript中的类型推断是如何工作的)
+- [11. TypeScript配置文件(tsconfig.json)如何配置？](#11-typescript配置文件tsconfigjson如何配置)
+- [12. TypeScript与JavaScript的区别是什么？](#12-typescript与javascript的区别是什么)
+- [13. TypeScript中的Utility Types有哪些？](#13-typescript中的utility-types有哪些)
+- [14. TypeScript中的命名空间（Namespace）和模块（Module）有什么区别？](#14-typescript中的命名空间namespace和模块module有什么区别)
+- [15. TypeScript中的声明合并（Declaration Merging）是什么？](#15-typescript中的声明合并declaration-merging是什么)
+- [16. TypeScript中的类型兼容性（Type Compatibility）是如何工作的？](#16-typescript中的类型兼容性type-compatibility是如何工作的)
+- [17. TypeScript中的this类型是如何工作的？](#17-typescript中的this类型是如何工作的)
+- [18. TypeScript中的映射类型（Mapped Types）如何使用？](#18-typescript中的映射类型mapped-types如何使用)
+- [19. TypeScript中的条件类型（Conditional Types）是什么？](#19-typescript中的条件类型conditional-types是什么)
+- [20. TypeScript中的模板字面量类型（Template Literal Types）是什么？](#20-typescript中的模板字面量类型template-literal-types是什么)
+- [21. TypeScript中的装饰器元数据（Decorator Metadata）如何使用？](#21-typescript中的装饰器元数据decorator-metadata如何使用)
+- [23. 解释一下TypeScript中的枚举（Enum）](#23-解释一下typescript中的枚举enum)
+- [24. TypeScript中的方法重写（Override）是什么？](#24-typescript中的方法重写override是什么)
+- [25. 什么是TypeScript Source Map（映射文件）？](#25-什么是typescript-source-map映射文件)
+- [26. TypeScript中的类类型接口是什么？](#26-typescript中的类类型接口是什么)
+- [27. TypeScript中never和void有什么区别？](#27-typescript中never和void有什么区别)
+- [28. 如何在TypeScript中使用Mixin？](#28-如何在typescript中使用mixin)
+- [29. TypeScript中的类型断言是什么？](#29-typescript中的类型断言是什么)
+- [30. 如何检查TypeScript中的null和undefined？](#30-如何检查typescript中的null和undefined)
+
+---
+
 ## 1. TypeScript是什么？有什么优势？
 
 TypeScript是由微软开发的开源编程语言，它是JavaScript的一个超集，添加了可选的静态类型和基于类的面向对象编程。
