@@ -134,7 +134,7 @@ function Child({ name }) {        // props.name 只读
 1. **不触发渲染**：React 通过 `setState` 这个“通知函数”才知道要重新渲染；直接赋值绕过了通知。
 2. **破坏浅比较**：`React.memo`、依赖数组、Diff 都靠引用变化判断。直接改对象属性，引用没变 → memo 失效、组件不更新。
 3. **并发模式隐患**：React 18 会保留旧状态的快照做并发渲染，可变 state 会让快照与当前值混淆，产生难以排查的 bug。
-4. **状态历史丢失**：无法时间旅行调试（Redux DevTools）、无法回滚。
+4. **难以调试与回滚**：可变 state 没有"旧值→新值"的清晰转移记录，难以可靠回滚；也无法依赖不可变性做优化判断（注意：Redux 的时间旅行依赖的是 action 历史而非 React state 不可变，但二者都建立在"状态不可变"的约定之上）。
 
 ```jsx
 // ❌ 错误：直接修改
@@ -173,6 +173,13 @@ setTimeout(() => { setCount(c => c + 1); console.log(count); }, 0);
 
 **批处理（batching）**：React 18 把 setTimeout / Promise / 原生事件里的多次 setState 也合并为一次渲染（自动批处理）。需要强制同步刷新用 `flushSync`。
 
+**进阶：setState 的更新队列与合并规则**（高级岗追问）：
+- 每次 `setState` 会生成一个 `update` 对象，挂到该 hook 的 `updateQueue` 上（环状链表）。React 在下次渲染时遍历这条队列算出最终 state。
+- 合并规则基于 **`Object.is`**：`setState(value)` 这类"直接赋值"按入队顺序后者覆盖前者；`setState(prev => next)` 函数式更新会**串起来**——前一个的返回值作为后一个的 `prev`。
+- **eagerState 优化（bail-out）**：若在事件处理函数内、且队列里只有这一个 update，React 会**提前用 `Object.is` 比较新旧 state**，相等则直接跳过这次渲染（这就是"setState 相同值不触发渲染"的底层原因）。但该优化仅在"无并发、无其他待处理更新"时才触发，不能依赖它做性能保障，显式 `memo` 仍需要。
+
+这也解释了上面为什么连续 `setCount(count + 1)` 只 +1：两次都基于同一渲染快照的旧 `count` 算出同一个值，后者覆盖前者；而 `setCount(c => c + 1)` 把两次串起来才 +2。
+
 ---
 
 ## P0-5. React 事件机制和原生 DOM 事件有什么区别？如何阻止冒泡和默认行为？
@@ -182,7 +189,7 @@ setTimeout(() => { setCount(c => c + 1); console.log(count); }, 0);
 2. **绑定位置**：React 17+ 委托到 root（`ReactDOM.createRoot` 的容器）；17 之前委托到 `document`。
 3. **事件名**：驼峰命名 `onClick`，原生全小写 `onclick`。
 4. **this 绑定**：类组件需手动绑定 `this`（或箭头函数 / 类字段）。
-5. **阻止行为 API 一致**：`e.stopPropagation()`、`e.preventDefault()`。注意：`stopPropagation()` 底层会调用原生的同名方法，会阻止事件继续向 root 容器之上（如 document 上的原生监听）冒泡；但事件本身是在 root 容器上委托的，所以"document 上的原生监听"和"root 上的 React 事件"的触发顺序是：**原生监听先触发，React 合成事件后触发**。
+5. **阻止行为 API 一致**：`e.stopPropagation()`、`e.preventDefault()`。React 17+ 合成事件的 `stopPropagation` 会调用原生 event 的同名方法。**触发顺序**（常见陷阱）：React 把事件委托在 **root 容器**，原生事件冒泡路径是 `target → root → document`，所以 **React 合成事件先触发，document 上的原生监听后触发**；若在合成事件里调用 `e.stopPropagation()`，会阻止事件继续冒泡到 document，从而让 document 上的原生监听不再触发。
 
 ```jsx
 function handle(e) {
@@ -191,7 +198,7 @@ function handle(e) {
 }
 ```
 
-**注意**：React 自身不推荐给 `document` 手动加原生监听和 React 混用，容易出现“原生监听先触发、React 委托后触发”的顺序问题。
+**注意**：React 17 前事件委托在 `document`，17 起改为 root 容器——这是常见面试陷阱。混用原生监听与 React 事件时，务必先想清楚冒泡路径与 `stopPropagation` 的作用边界。
 
 ---
 
@@ -253,6 +260,13 @@ const ref = useRef();
 4. **属性 diff**：同节点比较 props，生成属性补丁。
 5. **单向遍历 + lastPlacedIndex 定位移动**（React 用「按 key 建映射」+ 单向遍历，在 `reconcileChildren` 中通过 `lastPlacedIndex` 判断节点是否需要移动；注意 React 不做 Vue 那样的双端对比）。
 
+**单节点 diff vs 多节点 diff**：
+- **单节点**：新节点只有一个，比较 type 和 key，匹配则复用（打 Update），不匹配则新建并删除旧的。
+- **多节点**（列表）分两轮遍历：
+  1. **第一轮**：从左到右逐个对比新旧，key 相同则复用更新；遇到 key 不匹配立即停止第一轮。
+  2. **第二轮**：把旧节点剩余项按 key 建成 Map，遍历新节点剩余项——能在 Map 找到则复用并删除映射，找不到则新建；最后 Map 里没被消费的旧节点全部删除。
+  3. **移动判断**：复用节点时维护 `lastPlacedIndex`（上次复用节点在旧列表中的最大下标），若当前节点的旧下标 `< lastPlacedIndex` 说明它需要移动，否则更新 `lastPlacedIndex`。
+
 > 面试亮点：Vue3 用双端 Diff + 最长递增子序列优化移动；React 用 key + lastPlacedIndex 单向遍历，思路不同但都基于“同层、同类型、key 复用”的启发式假设。
 
 ---
@@ -273,7 +287,7 @@ const ref = useRef();
 - 函数组件每次渲染都执行，捕获的是**当次渲染的 props/state 快照**（闭包），天然避免 this 指向问题。
 - 类组件的 `this.state` 在异步回调里可能是旧值（需 `setState(fn)` 或读取 `this.props`）。
 - 官方推荐函数组件 + Hooks；类组件在旧代码库仍存在。
-- 类组件独有：`componentDidCatch`（Error Boundary 必须类组件，或 React 19 的 `use` + 错误边界组件）。
+- 类组件独有：`componentDidCatch` / `getDerivedStateFromError`（Error Boundary 至今只能用类组件实现，React 未提供函数组件的等价 API；`use` hook 与错误边界无关，不要混淆）。
 
 ---
 
@@ -302,12 +316,15 @@ useEffect(() => {
 4. **无限轮询接口**：用 `AbortController` + cleanup 取消。
 
 ```jsx
-// ❌ 死循环：obj 每次新建
+// ❌ 死循环：obj 每次渲染都是新引用
 const obj = { a: 1 };
 useEffect(() => {...}, [obj]);
 
-// ✅ 只依赖基本类型或用 useMemo
-useEffect(() => {...}, [obj.a]);
+// ✅ 方案 A：用 useMemo 稳定引用
+const obj = useMemo(() => ({ a: 1 }), []);
+useEffect(() => {...}, [obj]);
+// ✅ 方案 B：只依赖其中的基本类型字段
+useEffect(() => {...}, [somePrimitive]);
 ```
 
 ---
@@ -371,11 +388,18 @@ function Card({ children }) { return <div className="card">{children}</div>; }
 ## P0-扩展-6. React 中如何绑定事件？
 
 ```jsx
-<button onClick={handleClick}>           // 直接传函数
-<button onClick={() => handle(id)}>      // 需要参数（产生新函数，注意 memo）
+// 1. 直接传函数引用
+<button onClick={handleClick} />
+
+// 2. 内联箭头函数（需传参时用；每次新建函数，传给 memo 子组件要小心）
+<button onClick={() => handle(id)} />
+
+// 3. 类组件：类字段 + 箭头函数（自动绑定 this）
 class C extends Component {
-  handle = () => {}                       // 类字段 + 箭头函数（自动绑定 this）
-  <button onClick={this.handle.bind(this)}> // 或 bind
+  handle = () => { /* this 已绑定 */ };
+  render() {
+    return <button onClick={this.handle} />;          // 或 onClick={this.handle.bind(this)}
+  }
 }
 ```
 
@@ -621,7 +645,7 @@ class EB extends React.Component {
   render() { return this.state.hasError ? <Fallback /> : this.props.children; }
 }
 ```
-**函数组件不能直接实现**（没有 `getDerivedStateFromError`/`componentDidCatch` 等价 hooks，直到 React 19 的 `use` + 错误边界组件仍依赖 class 或库封装如 `react-error-boundary`）。
+**函数组件不能直接实现**：React 至今未提供 `getDerivedStateFromError`/`componentDidCatch` 的 hooks 等价物，错误边界仍需类组件（或基于类组件的库 `react-error-boundary`）。注意 React 19 的 `use` 是用来读取 Promise/Context 的，与错误边界无关。
 
 ## P1-扩展-8. forwardRef 和 useImperativeHandle 是什么？
 
@@ -714,7 +738,21 @@ function RequireAuth({ children }) {
 
 **解决的问题**：旧 Stack Reconciler 是**同步递归**，大组件树渲染会长时间占用主线程，导致动画卡顿、输入无响应。Fiber 把工作切片，**可暂停让出主线程**给高优任务（如用户输入），解决“掉帧/卡顿”。
 
-每个 Fiber 节点对应一个组件/DOM 节点，包含类型、props、state、副作用标记、指针（child/sibling/return），构成链表而非递归栈。
+每个 Fiber 节点对应一个组件/DOM 节点，构成 `child / sibling / return` 三向链表而非递归栈。**Fiber 节点的关键字段**（面试常追问）：
+
+| 字段 | 含义 |
+|---|---|
+| `tag` | 节点类型（FunctionComponent / ClassComponent / HostComponent 即 DOM 等） |
+| `type` | 组件函数 / 类 / DOM 标签名 |
+| `pendingProps` / `memoizedProps` | 本次待处理 / 上次渲染用到的 props |
+| `memoizedState` | 上次渲染后的 state（hooks 链表头） |
+| `updateQueue` | 待处理的更新队列（state 更新、回调等） |
+| `flags` / `subtreeFlags` | 本节点 / 子树的副作用标记（Placement/Update/Deletion） |
+| `lanes` | 该节点待处理的优先级（Lane 位） |
+| `alternate` | 指向**双缓冲**中对侧的那棵 Fiber（current ↔ workInProgress） |
+| `stateNode` | 对应的真实 DOM / 类实例 |
+
+**双缓冲（Double Buffering）**：React 同时维护两棵 Fiber 树——`current`（屏幕上当前显示的）和 `workInProgress`（内存中正在构建的），通过 `alternate` 指针互相指向。render 阶段在 `workInProgress` 上算，commit 完成后只需把 root 的 `current` 指针拨到 `workInProgress`，即完成切换、无需重建——这就是所谓"零成本切换 UI"。
 
 ## P2-2. React 渲染阶段和提交阶段分别做什么？
 
@@ -751,12 +789,21 @@ Scheduler 用 `MessageChannel`（而非 `setTimeout`，可规避嵌套定时器 
 
 ```jsx
 const [isPending, startTransition] = useTransition();
-const deferred = useDeferredValue(value); // 返回单个延迟值（不是数组），低优渲染
+const deferred = useDeferredValue(value);
 
-startTransition(() => { setHeavyState(next); }); // 包裹的更新让路
+startTransition(() => { setHeavyState(next); }); // 主动把这段更新标记为低优
 ```
-- `useTransition`：返回 `isPending` 标识过渡中（显示 loading）。
-- `useDeferredValue`：自动把某个值延后到紧急渲染完成后更新，适合搜索输入防抖式渲染。
+
+**`useTransition` vs `useDeferredValue` 怎么选**（高频追问）：
+
+| | useTransition | useDeferredValue |
+|---|---|---|
+| 视角 | 基于 **action**：你**主动**用 `startTransition` 包裹一段 setState | 基于 **value**：把一个值交给它，它返回一个"延迟版"的值 |
+| 谁控制 | 调用方（能拿到 setState 的地方） | 消费方（只有 value、改不了源头时，如第三方受控组件） |
+| 能拿 isPending | ✅ 返回 `isPending` 可显示 loading | ❌ 没有 pending 状态 |
+| 典型场景 | Tab 切换、路由跳转等"我能触发更新"的场景 | 搜索结果列表、大数据图表等"值变了但渲染重"的场景 |
+
+一句话：**能控制 setState 用 `useTransition`；只能拿到一个变化的值就用 `useDeferredValue`。**
 
 ## P2-7. 自动批处理 batching 是什么？flushSync 是什么？
 
@@ -852,7 +899,13 @@ ReactDOM.createPortal(<Modal />, document.body);
 
 ## P2-扩展-7. StrictMode 为什么开发环境会执行两次？
 
-`React.StrictMode` 在开发模式下**故意双重调用**（渲染、effect、构造函数）以暴露不纯代码（如副作用没 cleanup、有可变全局状态）。生产环境不会。目的：帮助发现“本应可重复执行却依赖单次执行”的隐藏 bug。
+`React.StrictMode` 在开发模式下**故意重复调用**某些函数以暴露不纯代码（副作用没 cleanup、有可变全局状态）。生产环境不会重复调用。具体会被双重调用的：
+- 组件函数体（render）
+- 类的 `constructor`、`render`
+- `useState` / `useMemo` 的 initializer / factory，`useReducer` 的 reducer
+- `useEffect` / `useLayoutEffect` 的 mount：会执行 `setup → cleanup → setup`
+
+目的：帮助发现“本应可重复执行却依赖单次执行”的隐藏 bug，让并发渲染（render 可能被打断重做）下的副作用更健壮。
 
 ## P2-扩展-8. useSyncExternalStore 是什么？
 
@@ -1054,10 +1107,18 @@ function Auth({ perm, children }) {
 
 ```js
 let refreshing = null;
-function handle401() {
-  if (!refreshing) refreshing = refreshToken().finally(() => (refreshing = null));
-  return refreshing.then(retry);
+function handle401(failedRequest) {
+  if (!refreshing) {
+    refreshing = refreshToken(); // 只发一次 refresh，其余请求复用同一个 Promise（刷新锁）
+  }
+  return refreshing
+    .then(({ accessToken }) => {
+      failedRequest.headers.token = accessToken; // 用新 token 重试原请求
+      return axios(failedRequest);
+    })
+    .finally(() => { refreshing = null; }); // refresh 结束复位锁；失败由拦截器跳登录
 }
+// 调用处：响应拦截器捕获 401 时 return handle401(err.config)
 ```
 
 ## P3-扩展-2. 如何做登录态持久化？
@@ -1077,8 +1138,14 @@ function handle401() {
 ```jsx
 useEffect(() => {
   const ctrl = new AbortController();
-  fetch(`/search?q=${q}`, { signal: ctrl.signal }).then(...)
-  return () => ctrl.abort();
+  fetch(`/search?q=${q}`, { signal: ctrl.signal })
+    .then(res => res.json())
+    .then(data => setData(data))
+    .catch(err => {
+      // abort 抛的 AbortError 必须捕获并忽略，否则进入未处理拒绝
+      if (err.name !== 'AbortError') setError(err);
+    });
+  return () => ctrl.abort(); // 卸载或 q 变化时取消上一次请求
 }, [q]);
 ```
 
@@ -1176,6 +1243,161 @@ useEffect(() => {
   - **状态最小化**：能从 props/URL/已有 state 推导的，不单独存。
   - **读写分离**：读走选择器（按需订阅避免多余渲染），写走 action/mutation（可追踪）。
 - **数据流方向**：保持单向（事件 → action → store → 视图），禁止子组件直接改全局数据，便于调试与回溯。
+
+---
+
+# 经典补充高频题（补齐上面 100 题未覆盖）
+
+## 补-1. 虚拟 DOM 真的比直接操作 DOM 快吗？
+
+不是。VDOM 的真正价值不在"更快"，而在于：
+1. **声明式 > 命令式**：开发者写"UI 应该是什么样"，React 算差异，心智成本低、可维护。
+2. **批量 + 最小化 DOM 操作**：diff 在内存做，最后只提交一次真实 DOM 写入，减少重排重绘。
+3. **跨平台**：同一套协调逻辑能渲染到 DOM、Native、SSR、Canvas 等。
+
+代价：多了构建 + diff VDOM 的 JS 开销。**单点极致性能**下，精心写的原生 DOM 一定快过 VDOM；但大型应用里手写命令式 DOM 维护成本失控。所以"VDOM 快"是相对 jQuery 时代"无脑全量重渲"而言的工程胜利，不是绝对性能优势。
+
+## 补-2. 为什么 useState 返回数组而不是对象？
+
+返回数组 `[state, setState]` 便于**按位置自由命名**：
+
+```jsx
+const [count, setCount] = useState(0);          // 变量名随意
+const [name, setName] = useState('');
+```
+
+若返回对象 `{ state, setState }` 则 key 固定、命名受限（或要重命名）。数组解构 + 任意变量名更灵活，是 hooks 的设计约定。
+
+## 补-3. 受控↔非受控切换警告怎么回事？
+
+```
+Warning: A component is changing a controlled input to be uncontrolled.
+```
+
+成因：受控输入的 `value` 在某次渲染变成 `undefined`/`null`（如 `value={data.name}` 而 `data` 还没加载）。React 视其为非受控，状态来源从 state 切到 DOM，行为不可预测。
+
+修复：给兜底值 `value={data?.name ?? ''}`，确保 `value` 始终是字符串；不要在受控/非受控之间反复横跳。
+
+## 补-4. Concurrent 模式下的 tearing（撕裂）是什么？useSyncExternalStore 怎么解决？
+
+**Tearing**：并发渲染中，同一棵树的不同部分可能读到**同一个外部状态的不同版本**——比如先渲染的部分读到旧值、被中断后用新值继续渲染后半部分，导致 UI 内部不一致。
+
+**useSyncExternalStore 的解法**：强制组件在渲染期间**同步**读取外部 store 快照（`getSnapshot`），并通过 `subscribe` 在 store 变化时通知 React；若渲染进行中 store 又变了，React 会以更高优先级**重新启动**该次渲染，保证读到的一致。还内置快照缓存避免无限循环。
+
+适用：Zustand / Redux / 浏览器 API（`matchMedia`、`navigator.onLine`）等外部可变源接入 React。
+
+## 补-5. Lane 模型详解？
+
+React 18 用 **Lane（车道）** 取代 17 的 `expirationTime` 做优先级。Lane 是 **31 位整数中的某一位**，每个 bit 代表一条优先级。
+
+特点：
+- **位运算表达"批次"**：多个 lane 用按位或 `|` 合成一个 `lanes`，更新是否属于某次渲染用按位与 `&` 判断——O(1) 位运算，比数值比较更适合表达"一组更新同时进行"。
+- **优先级分层**：高优（SyncLane、离散/连续输入 InputDiscreteLane / InputContinuousLane）、默认（DefaultLane）、过渡（TransitionLanes，多条用于不同 transition 批次）、空闲（IdleLane）。
+- **离散 vs 连续**：离散事件（click）和连续事件（mousemove、input）有不同 lane，连续事件可被打断以避免掉帧。
+
+一句话：Lane 用"位"同时表达优先级与批次归属，让并发调度能精确插队、合并、批处理。
+
+## 补-6. HOC 的两种实现与常见坑？
+
+- **属性代理（Props Proxy）**：HOC 返回一个新组件，把被包裹组件作为子组件渲染并透传 props。最常见。
+- **反向继承（Inheritance Inversion）**：HOC 返回一个**继承**被包裹组件的类，劫持其 render / 生命周期（强耦合，少用）。
+
+坑：
+1. **静态方法丢失**：HOC 返回新组件，原组件静态方法不会自动带过来 → 手动拷贝或用 `hoist-non-react-statics`。
+2. **refs 不转发**：`ref` 指向 HOC 而非被包裹组件 → 用 `forwardRef`。
+3. **displayName**：为方便 DevTools 调试，应给包装后的组件设置 `displayName`（如 `WithX(原组件名)` 的形式），便于在 DevTools 里识别。
+4. **不要在 render 里调用 HOC**：每次 render 都创建新组件，会全量卸载重建、丢失状态；HOC 要在模块顶层应用。
+
+## 补-7. React 18 SSR Streaming 与 Selective Hydration？
+
+React 18 对 SSR 的两个大改进：
+
+- **Streaming（流式）**：`renderToPipeableStream` / `renderToReadableStream` 让服务端**边生成 HTML 边发送**，不必等所有数据齐了才返回首字节；配合 `<Suspense>` 可先发 fallback，数据就绪再流式补上对应区块。
+- **Selective Hydration（选择性水合）**：客户端水合时，若用户与某块已渲染但未水合的区域交互（如点击），React 会**优先水合那块**；且水合可在切片间隙进行，不再像 React 17 那样整页水合期间完全阻塞主线程。
+
+二者结合：用户更快看到内容、更快可交互，且不阻塞主线程。
+
+---
+
+# React 19 新特性专题
+
+> React 19 已稳定。以下为高级面试高频追问点。
+
+## R19-1. React Compiler 解决了什么？
+
+React Compiler（原 React Forget）是**编译时**优化器：在编译阶段自动分析组件，对可证明"纯"的值/JSX 做**自动 memo 化**——等价于自动插入合适数量的 `useMemo`/`useCallback`/`React.memo`，且不破坏规则。
+
+意义：
+- 开发者**不再需要手写绝大部分 `useMemo`/`useCallback`/`React.memo`**，也无需纠结"包了反而更慢"的权衡。
+- 从根本上减少"因引用变化导致的不必要重渲染"。
+- 前提是组件必须遵守"render 是纯函数、无副作用"的规则——编译器正是靠这个才能安全优化（这也是 StrictMode 双调用逼你写纯代码的原因）。
+
+注意：Compiler 是渐进式的，可只对部分目录启用；它不替代真正的虚拟列表、并发特性等手动优化。
+
+## R19-2. Actions：useActionState / useOptimistic / useFormStatus
+
+React 19 把"表单提交 / 异步 action"做成一等公民，统称 **Actions**。
+
+- **`useActionState(action, initial)`**：管理一个异步 action 的状态（含返回值、pending）。`action` 签名 `(prevState, formData) => newState`，可直接传给 `<form action={...}>`。
+- **`useOptimistic(initial, reducer)`**：乐观更新——请求发出后、返回前，先乐观地把 UI 切到"预期结果"，请求失败再回滚。
+- **`useFormStatus()`**：在表单**子孙**组件里读取所属 `<form>` 的提交状态（`pending`），无需 prop 透传。
+
+```jsx
+function UpdateName() {
+  const [error, submitAction, isPending] = useActionState(
+    async (prev, formData) => {
+      const err = await updateName(formData.get('name'));
+      return err ?? null;          // 返回 null 表示成功
+    },
+    null
+  );
+  return (
+    <form action={submitAction}>
+      <input name="name" />
+      <button disabled={isPending}>保存</button>
+      {error && <p>{error}</p>}
+    </form>
+  );
+}
+```
+
+## R19-3. `use` hook 和别的 hook 有什么不同？
+
+`use(promise)` / `use(context)`：
+- **可在条件 / 循环中调用**（唯一不受"不能在条件里调用"约束的 hook）——内部展开 Promise，遇到 pending 就 throw 给最近的 Suspense 边界。
+- 读取 Promise 时配合 `<Suspense>` + Error Boundary，组件能像写同步代码一样用异步结果。
+- 读取 Context 时 `use(Context)` 与 `useContext` 等价，但 `use` 允许在条件分支里按需读取。
+
+```jsx
+const data = use(fetchPromise);  // 配合 Suspense，组件可像同步代码用 data
+```
+
+⚠️ 注意：`use` 与 **Error Boundary 无关**（错误边界仍只能用类组件），别把两者混为一谈。
+
+## R19-4. ref 作为 prop、ref callback cleanup
+
+- **ref 作为 prop**：React 19 起函数组件可直接通过 props 接收 `ref`，不再必须包 `forwardRef`（`forwardRef` 仍保留以兼容）。
+  ```jsx
+  function Input({ ref, ...props }) {
+    return <input ref={ref} {...props} />;
+  }
+  <Input ref={myRef} />
+  ```
+- **ref callback 可返回 cleanup**：像 `useEffect` 一样，ref 回调返回的函数会在 detach（节点卸载或 ref 变化）时执行，便于清理观察者等。
+  ```jsx
+  <div ref={(node) => {
+    if (node) observer.observe(node);
+    return () => observer.disconnect();   // cleanup
+  }} />
+  ```
+
+## R19-5. Document Metadata 与其他小改进
+
+- **Document Metadata**：组件内直接写 `<title>`/`<meta>`/`<link>`，React 自动 hoist 到 `<head>` 并管理生命周期，不再依赖 react-helmet。
+- **异步脚本支持**：`<script async>` 可由 React 协调。
+- **`cache` API**：主要用于 Server Components，做请求级 memo（同一 render 内同 key 只算一次）。
+
+> 与 React 18 的关系：React 19 = 18 的并发能力 + Compiler 自动化 + Actions 表单 + Server Components 生产可用 + 一系列 DX 改进。
 
 ---
 
