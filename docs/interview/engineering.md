@@ -1,6 +1,8 @@
 ---
 sidebar_position: 5
 title: 前端工程化面试题
+toc_min_heading_level: 2
+toc_max_heading_level: 2
 ---
 
 # 前端工程化面试题

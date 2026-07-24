@@ -1,6 +1,8 @@
 ---
 sidebar_position: 7
 title: 设计模式面试题
+toc_min_heading_level: 2
+toc_max_heading_level: 2
 ---
 
 # 设计模式面试题

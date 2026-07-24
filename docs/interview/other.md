@@ -1,6 +1,8 @@
 ---
 sidebar_position: 8
 title: 软件工程与团队协作
+toc_min_heading_level: 2
+toc_max_heading_level: 2
 ---
 
 # 软件工程与团队协作

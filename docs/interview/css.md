@@ -1,6 +1,8 @@
 ---
 sidebar_position: 3
 title: CSS
+toc_min_heading_level: 2
+toc_max_heading_level: 2
 ---
 
 ## 目录
